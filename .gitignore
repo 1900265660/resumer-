@@ -1,0 +1,17 @@
+# Personal career data and generated application material must stay local.
+profile/*
+!profile/README.md
+jobs/inbox/*
+!jobs/inbox/.gitkeep
+jobs/approved/*
+!jobs/approved/.gitkeep
+applications/*
+!applications/.gitkeep
+tmp/
+*.pdf
+*.docx
+*.xlsx
+*.png
+*.jpg
+!.agents/assets/**
+__pycache__/

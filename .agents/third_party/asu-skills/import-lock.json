@@ -1,0 +1,10 @@
+{
+  "name": "asu-skills",
+  "source_repository": "https://github.com/Hisn00w/ASu-skills",
+  "version": "0.3.0+codex.20260815043254",
+  "commit": "2c6da0e9a26cfca75ec095b623df1589e512cc07",
+  "license": "MIT",
+  "imported_at": "2026-08-18",
+  "import_mode": "project-local snapshot",
+  "skills": ["asu", "asu-resume", "resume", "offer", "contributor"]
+}

@@ -1,0 +1,150 @@
+# Project
+
+Resume Rewrite Agent
+
+## Product Goal
+
+构建一个根据用户原始简历和目标 JD，对简历进行分析、岗位匹配、针对性改写和结果校验的 AI Agent。
+
+MVP 核心流程：
+
+Resume + JD
+→ Analyze
+→ Match
+→ Rewrite
+→ Verify
+→ Final Resume
+
+第一阶段只完成上述核心闭环。
+
+不得自行增加职位搜索、自动投递、面试模拟等非 MVP 功能。
+
+---
+
+# Development Principles
+
+1. 优先完成最小可运行 MVP。
+2. 不进行没有明确需求支持的过度设计。
+3. 每次只处理当前指定任务。
+4. 不进行与当前任务无关的大规模重构。
+5. 修改前先阅读相关代码和文档。
+6. 新增行为必须添加对应测试。
+7. Prompt 与业务代码分离。
+8. Agent orchestration 与具体业务模块分离。
+9. 所有 LLM 结构化输出必须经过 Schema 校验。
+10. 能使用确定性代码完成的逻辑，优先使用普通代码，而不是 LLM。
+11. Domain 层尽量避免绑定具体模型 Provider。
+12. 不为了“未来可能需要”提前增加复杂基础设施。
+
+---
+
+# Required Project Documents
+
+开始任务前，根据需要阅读：
+
+* `docs/PRD.md`
+* `docs/ARCHITECTURE.md`
+* `docs/TASKS.md`
+* `docs/EVAL_PLAN.md`
+
+产品需求以 PRD 为准。
+
+系统架构以 ARCHITECTURE 为准。
+
+任务范围以 TASKS 为准。
+
+如果代码与文档存在明显冲突，先指出，不要自行猜测产品意图。
+
+---
+
+# Standard Development Workflow
+
+每个任务按照以下流程执行：
+
+Understand
+→ Inspect
+→ Plan
+→ Implement
+→ Test
+→ Review
+
+开始编码前：
+
+1. 阅读当前任务。
+2. 阅读相关代码。
+3. 简要说明当前实现。
+4. 给出修改方案。
+5. 列出预计修改文件。
+
+然后再实现。
+
+---
+
+# Testing
+
+任何新增行为都必须有测试。
+
+完成修改后，根据项目当前配置执行：
+
+* unit tests
+* integration tests
+* lint
+* type check
+
+如果某项检查当前项目不存在，不需要为了满足形式强行引入新的工具，但要在结果中说明。
+
+如果测试失败：
+
+先定位原因并修复。
+
+不要通过删除测试、跳过测试或降低断言标准来制造通过结果。
+
+---
+
+# LLM Development Rules
+
+LLM 模块必须明确：
+
+* Input
+* Output
+* Schema
+* Prompt
+* Failure behavior
+
+Prompt 文件放在独立的 prompts 目录中。
+
+不得把超长 Prompt 直接硬编码到业务代码。
+
+模块之间优先使用结构化数据传递。
+
+不得依赖自然语言文本解析作为核心模块接口。
+
+---
+
+# Definition of Done
+
+一个任务只有满足以下条件才算完成：
+
+1. 当前 Task 要求已实现。
+2. 没有实现额外无关功能。
+3. 相关测试通过。
+4. Schema / 接口保持一致。
+5. diff 中没有明显无关修改。
+6. 文档在确实发生架构或行为变化时同步更新。
+
+---
+
+# Final Report
+
+每个任务结束时说明：
+
+* 完成了什么
+* 修改了哪些主要文件
+* 测试结果
+* 发现的问题
+* 尚未完成的内容
+* 推荐的下一个 Task
+
+完成当前 Task 后停止。
+
+不要自动开始下一项任务。

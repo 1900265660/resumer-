@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>Mock ATS - AI 产品运营</title>
+  <style>
+    body { max-width: 720px; margin: 32px auto; color: #182230; font: 16px/1.5 "Microsoft YaHei", sans-serif; }
+    fieldset { margin: 16px 0; border: 1px solid #cad2df; border-radius: 8px; padding: 16px; }
+    label { display: block; margin: 10px 0; } input, textarea { width: 100%; padding: 8px; box-sizing: border-box; }
+    button { padding: 9px 16px; background: #2458b8; color: #fff; border: 0; border-radius: 5px; } button:disabled { background: #8893a3; }
+    .warning { color: #9a5d00; background: #fff7e6; padding: 10px; border-radius: 6px; }
+    #receipt { display: none; color: #087443; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <h1>本地模拟 ATS：AI 产品运营</h1>
+  <p>仅用于工作流回归测试；不会向网络发送数据。</p>
+  <form id="application">
+    <fieldset>
+      <legend>已批准的普通字段</legend>
+      <label>姓名 <input name="name" required></label>
+      <label>手机 <input name="phone" required></label>
+      <label>邮箱 <input name="email" required type="email"></label>
+      <label>预计毕业时间 <input name="graduation_date" required></label>
+      <label>自我介绍（应先由候选人审阅）<textarea name="self_intro" required></textarea></label>
+      <label>简历 PDF <input name="resume" required type="file" accept="application/pdf"></label>
+    </fieldset>
+    <fieldset>
+      <legend>未知敏感字段（不允许自动填写）</legend>
+      <label>期望薪资 <input name="salary" data-sensitive="true" placeholder="仅用户确认后填写"></label>
+      <p class="warning">自动化应检测并暂停在此字段；本回归不填写。</p>
+    </fieldset>
+    <label><input id="approval" type="checkbox"> 我确认这是本地模拟测试，允许生成测试回执。</label>
+    <button id="submit" type="submit" disabled>最终提交（本地模拟）</button>
+  </form>
+  <p id="receipt">本地模拟提交成功；未产生任何外部投递。</p>
+  <script>
+    const form = document.querySelector('#application');
+    const approval = document.querySelector('#approval');
+    const submit = document.querySelector('#submit');
+    approval.addEventListener('change', () => { submit.disabled = !approval.checked; });
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      if (!approval.checked || form.elements.salary.value) return;
+      document.querySelector('#receipt').style.display = 'block';
+      submit.disabled = true;
+    });
+  </script>
+</body>
+</html>
