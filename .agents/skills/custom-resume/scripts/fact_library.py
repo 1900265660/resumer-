@@ -4,7 +4,9 @@ import argparse
 import difflib
 import hashlib
 import json
+import os
 import re
+import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -354,6 +356,91 @@ def write_preview(source: Path, output_dir: Path) -> MigrationReport:
     return report
 
 
+def apply_preview(
+    source: Path,
+    preview: Path,
+    preview_report: Path,
+    apply_report: Path,
+    *,
+    approval_granted: bool,
+) -> dict[str, object]:
+    if not approval_granted:
+        raise FactLibraryError("explicit approval is required before writing fact IDs")
+    try:
+        expected = json.loads(preview_report.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise FactLibraryError("migration preview report is missing or invalid") from error
+    required_report_fields = {
+        "source_sha256",
+        "preview_sha256",
+        "body_preserved",
+        "experience_count",
+        "fact_count",
+    }
+    if not required_report_fields.issubset(expected):
+        raise FactLibraryError("migration preview report is incomplete")
+    if expected["body_preserved"] is not True:
+        raise FactLibraryError("migration preview did not prove body preservation")
+    source_text, source_raw = read_utf8(source)
+    preview_text, preview_raw = read_utf8(preview)
+    source_hash = sha256_bytes(source_raw)
+    preview_hash = sha256_bytes(preview_raw)
+    if source_hash != expected["source_sha256"]:
+        raise SourceChangedError(
+            f"source hash changed: expected {expected['source_sha256']}, got {source_hash}"
+        )
+    if preview_hash != expected["preview_sha256"]:
+        raise FactLibraryError("preview hash does not match migration report")
+    if strip_metadata(preview_text) != strip_metadata(source_text):
+        raise FactLibraryError("preview changes non-metadata fact body")
+    validated_text, validated_report = migrate_text(preview_text)
+    if validated_text != preview_text:
+        raise FactLibraryError("preview is missing required IDs or is not idempotent")
+    if validated_report.experience_count != expected["experience_count"]:
+        raise FactLibraryError("preview experience count does not match report")
+    if validated_report.fact_count != expected["fact_count"]:
+        raise FactLibraryError("preview fact count does not match report")
+
+    temporary = source.with_name(f".{source.name}.{uuid.uuid4().hex}.tmp")
+    temporary.write_bytes(preview_raw)
+    if sha256_bytes(temporary.read_bytes()) != preview_hash:
+        raise FactLibraryError("temporary migration write failed hash verification")
+    os.replace(temporary, source)
+
+    written_text, written_raw = read_utf8(source)
+    if sha256_bytes(written_raw) != preview_hash:
+        raise FactLibraryError("written fact library hash does not match preview")
+    if strip_metadata(written_text) != strip_metadata(source_text):
+        raise FactLibraryError("written fact library changed non-metadata body")
+    remigrated, final_validation = migrate_text(written_text)
+    if remigrated != written_text:
+        raise FactLibraryError("written fact library failed ID validation")
+
+    result: dict[str, object] = {
+        "applied_at": datetime.now(timezone.utc).isoformat(),
+        "source_path": str(source.resolve()),
+        "original_sha256": source_hash,
+        "applied_sha256": preview_hash,
+        "original_body_sha256": sha256_bytes(
+            strip_metadata(source_text).encode("utf-8")
+        ),
+        "applied_body_sha256": sha256_bytes(
+            strip_metadata(written_text).encode("utf-8")
+        ),
+        "experience_count": final_validation.experience_count,
+        "fact_count": final_validation.fact_count,
+        "body_preserved": True,
+        "approval_record": "explicit_user_confirmation",
+    }
+    apply_report.parent.mkdir(parents=True, exist_ok=True)
+    apply_report.write_text(
+        json.dumps(result, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+        newline="",
+    )
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Validate and preview stable IDs for the custom-resume fact library"
@@ -364,11 +451,29 @@ def main() -> int:
     preview.add_argument("--output-dir", required=True, type=Path)
     validate = subparsers.add_parser("validate")
     validate.add_argument("--source", required=True, type=Path)
+    apply = subparsers.add_parser("apply")
+    apply.add_argument("--source", required=True, type=Path)
+    apply.add_argument("--preview", required=True, type=Path)
+    apply.add_argument("--preview-report", required=True, type=Path)
+    apply.add_argument("--apply-report", required=True, type=Path)
+    apply.add_argument("--approval-token", required=True)
     args = parser.parse_args()
 
     if args.command == "preview":
         report = write_preview(args.source, args.output_dir)
         print(json.dumps(asdict(report), ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "apply":
+        if args.approval_token != "ID_ONLY_DIFF_APPROVED":
+            raise FactLibraryError("invalid approval token")
+        result = apply_preview(
+            args.source,
+            args.preview,
+            args.preview_report,
+            args.apply_report,
+            approval_granted=True,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     source_text, _ = read_utf8(args.source)
     migrated_text, report = migrate_text(source_text)

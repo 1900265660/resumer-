@@ -13,6 +13,7 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 from fact_library import (  # noqa: E402
     FactLibraryError,
     SourceChangedError,
+    apply_preview,
     assert_source_unchanged,
     migrate_text,
     strip_metadata,
@@ -140,3 +141,63 @@ def test_real_fact_library_supports_read_only_preview(tmp_path: Path) -> None:
     assert report.body_preserved is True
     assert report.experience_count > 0
     assert report.fact_count > 0
+
+
+def test_apply_requires_approval_and_preserves_body(tmp_path: Path) -> None:
+    source = tmp_path / "profile.md"
+    source.write_text(SAMPLE, encoding="utf-8")
+    output_dir = tmp_path / "preview"
+    write_preview(source, output_dir)
+    original_body = source.read_text(encoding="utf-8")
+
+    with pytest.raises(FactLibraryError, match="explicit approval"):
+        apply_preview(
+            source,
+            output_dir / "candidate-profile.with-ids.md",
+            output_dir / "migration-report.json",
+            output_dir / "apply-report.json",
+            approval_granted=False,
+        )
+    assert source.read_text(encoding="utf-8") == original_body
+
+    result = apply_preview(
+        source,
+        output_dir / "candidate-profile.with-ids.md",
+        output_dir / "migration-report.json",
+        output_dir / "apply-report.json",
+        approval_granted=True,
+    )
+    assert result["body_preserved"] is True
+    assert strip_metadata(source.read_text(encoding="utf-8")) == original_body
+    assert (output_dir / "apply-report.json").exists()
+
+
+def test_apply_rejects_source_or_preview_tampering(tmp_path: Path) -> None:
+    source = tmp_path / "profile.md"
+    source.write_text(SAMPLE, encoding="utf-8")
+    output_dir = tmp_path / "preview"
+    write_preview(source, output_dir)
+    source.write_text(SAMPLE + "\n", encoding="utf-8")
+    with pytest.raises(SourceChangedError, match="source hash changed"):
+        apply_preview(
+            source,
+            output_dir / "candidate-profile.with-ids.md",
+            output_dir / "migration-report.json",
+            output_dir / "apply-report.json",
+            approval_granted=True,
+        )
+
+    source.write_text(SAMPLE, encoding="utf-8")
+    preview = output_dir / "candidate-profile.with-ids.md"
+    preview.write_text(
+        preview.read_text(encoding="utf-8").replace("测试公司", "被篡改公司"),
+        encoding="utf-8",
+    )
+    with pytest.raises(FactLibraryError, match="preview hash"):
+        apply_preview(
+            source,
+            preview,
+            output_dir / "migration-report.json",
+            output_dir / "apply-report.json",
+            approval_granted=True,
+        )
