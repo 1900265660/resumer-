@@ -21,7 +21,7 @@ Unknown fields are rejected unless a later documented schema revision explicitly
 | `run.json` | State, input digests, artifact inventory, errors, and revision count |
 | `jd-analysis.json` | Job goals, prioritized requirements, risks, keywords, and ideal evidence blueprint |
 | `evidence-map.json` | Requirement-to-fact mapping, coverage level, selections, and gaps |
-| `fact-diff.json` | Proposed fact additions/replacements, provenance, and confirmation state |
+| `fact-diff.json` | Proposed fact additions/replacements, provenance, confirmation state, source hash, and applied result hash |
 | `draft-writer.json` | Writer sections, bullets, fact IDs, requirement IDs, and candidate suggestions |
 | `draft-asu.json` | ASu Writer output using the same draft contract |
 | `fusion.json` | Fused bullets, source decisions, rewrite reasons, and fact IDs |
@@ -29,6 +29,7 @@ Unknown fields are rejected unless a later documented schema revision explicitly
 | `current.json` | Approved/stale run pointer and referenced-fact value digests |
 | `validation.json` | Stable hard/warning findings and content-budget metrics |
 | `reference-research.json` | Local/supplemented/degraded method-card routing evidence |
+| `resume-content/.pending/<run_id>.json` | Recoverable human-gate checkpoint; removed after immutable run commit |
 
 `fact-diff.json` may contain at most five structured option-style questions. The number of confirmed add/replace operations is not coupled to the question count.
 
@@ -40,4 +41,4 @@ Unknown fields are rejected unless a later documented schema revision explicitly
 
 ## Implementation
 
-The models, strict enumerations, cross-field validators, transition guard, and JSON Schema exporter are implemented in `scripts/models.py`. Immutable storage lives in `scripts/storage.py`, fact parsing/migration in `scripts/fact_library.py`, deterministic hard gates in `scripts/validators.py`, and the content-only state machine orchestration in `scripts/orchestrator.py`.
+The models, strict enumerations, cross-field validators, transition guard, and JSON Schema exporter are implemented in `scripts/models.py`. Immutable storage lives in `scripts/storage.py`, fact parsing/migration in `scripts/fact_library.py`, deterministic hard gates in `scripts/validators.py`, the run-directory CLI verifier in `scripts/validate_run.py`, and the content-only state machine orchestration in `scripts/orchestrator.py`.

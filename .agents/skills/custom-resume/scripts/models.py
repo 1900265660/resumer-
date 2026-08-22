@@ -357,12 +357,18 @@ class FactGapQuestion(StrictModel):
 
 class FactDiffArtifact(ArtifactBase):
     source_fact_sha256: Sha256
+    result_fact_sha256: Sha256 | None = None
     confirmation_status: ConfirmationStatus = ConfirmationStatus.PENDING
     questions: list[FactGapQuestion] = Field(default_factory=list, max_length=5)
     operations: list[FactDiffOperation] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def root_status_must_match_operations(self) -> "FactDiffArtifact":
+        if (
+            self.confirmation_status is not ConfirmationStatus.APPROVED
+            and self.result_fact_sha256 is not None
+        ):
+            raise ValueError("only an approved fact diff may record a result hash")
         ids = [item.operation_id for item in self.operations]
         _ensure_unique(ids, "operations.operation_id")
         question_ids = [item.question_id for item in self.questions]
@@ -714,6 +720,54 @@ class ReferenceResearchArtifact(ArtifactBase):
         return self
 
 
+class RunCheckpointArtifact(ArtifactBase):
+    state: ContentState
+    execution_mode: ExecutionMode = ExecutionMode.BLIND_DUAL
+    input_packet: NormalizedInputPacket
+    reference_research: ReferenceResearchArtifact
+    jd_analysis: JDAnalysisArtifact
+    evidence_map: EvidenceMapArtifact
+    fact_diff: FactDiffArtifact
+
+    @model_validator(mode="after")
+    def checkpoint_must_be_consistent(self) -> "RunCheckpointArtifact":
+        allowed = {
+            ContentState.ANALYZING,
+            ContentState.NEEDS_INPUT,
+            ContentState.AWAITING_SELECTION_APPROVAL,
+            ContentState.DRAFTING,
+        }
+        if self.state not in allowed:
+            raise ValueError(f"unsupported checkpoint state: {self.state.value}")
+        artifacts = (
+            self.input_packet,
+            self.reference_research,
+            self.jd_analysis,
+            self.evidence_map,
+            self.fact_diff,
+        )
+        if any(item.run_id != self.run_id for item in artifacts):
+            raise ValueError("checkpoint artifacts must share run_id")
+        if any(item.source_digests != self.source_digests for item in artifacts):
+            raise ValueError("checkpoint artifacts must share source_digests")
+        if self.jd_analysis.role_family is not self.input_packet.role_family:
+            raise ValueError("checkpoint role families must match")
+        approved = self.state is ContentState.DRAFTING
+        if self.evidence_map.selection_approved is not approved:
+            raise ValueError(
+                "drafting checkpoint requires approved selection; gate checkpoints forbid it"
+            )
+        if approved != bool(self.input_packet.approved_requirement_ids):
+            raise ValueError(
+                "drafting checkpoint requires approved requirement IDs only after selection"
+            )
+        if not approved and self.input_packet.approved_fact_ids:
+            raise ValueError(
+                "gate checkpoints cannot contain approved fact IDs"
+            )
+        return self
+
+
 class RunManifestArtifact(ArtifactBase):
     state: ContentState
     execution_mode: ExecutionMode = ExecutionMode.BLIND_DUAL
@@ -799,7 +853,11 @@ ALLOWED_TRANSITIONS: dict[ContentState, frozenset[ContentState]] = {
         }
     ),
     ContentState.NEEDS_INPUT: frozenset(
-        {ContentState.AWAITING_SELECTION_APPROVAL, ContentState.FAILED}
+        {
+            ContentState.ANALYZING,
+            ContentState.AWAITING_SELECTION_APPROVAL,
+            ContentState.FAILED,
+        }
     ),
     ContentState.AWAITING_SELECTION_APPROVAL: frozenset(
         {ContentState.DRAFTING, ContentState.FAILED}
@@ -845,6 +903,7 @@ ARTIFACT_MODELS: dict[str, type[BaseModel]] = {
     "agent-failure": AgentFailureArtifact,
     "validation": DeterministicValidationArtifact,
     "reference-research": ReferenceResearchArtifact,
+    "run-checkpoint": RunCheckpointArtifact,
 }
 
 

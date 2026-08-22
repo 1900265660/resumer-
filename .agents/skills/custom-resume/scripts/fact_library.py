@@ -12,6 +12,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
+from models import (
+    ConfirmationStatus,
+    DiffAction,
+    FactDiffArtifact,
+    FactDiffOperation,
+    FactProvenance,
+)
+
 
 METADATA_RE = re.compile(r" ?<!--\s*(?P<body>.*?)\s*-->\s*$")
 H2_RE = re.compile(r"^##\s+(?P<title>.+?)\s*$")
@@ -445,6 +453,180 @@ def assert_source_unchanged(source: Path, expected_sha256: str) -> None:
         raise SourceChangedError(
             f"source hash changed: expected {expected_sha256}, got {actual}"
         )
+
+
+def _assert_safe_fact_diff_text(value: str, field_name: str) -> None:
+    if not value.strip() or "\n" in value or "\r" in value:
+        raise FactLibraryError(f"{field_name} must be one non-empty line")
+    if "<!--" in value or "-->" in value:
+        raise FactLibraryError(f"{field_name} cannot contain metadata markers")
+
+
+def _fact_diff_metadata(
+    operation: FactDiffOperation,
+    fact_id: str,
+    run_id: str,
+    preserved_experience_id: str | None = None,
+) -> dict[str, str]:
+    metadata: dict[str, str] = {}
+    if preserved_experience_id:
+        metadata["experience_id"] = preserved_experience_id
+    metadata["fact_id"] = fact_id
+    metadata["provenance"] = operation.provenance.value
+    if operation.provenance is FactProvenance.ACCEPTED_ESTIMATE:
+        if not operation.confirmed_at or not operation.estimate_basis:
+            raise FactLibraryError("accepted estimate confirmation metadata is incomplete")
+        _assert_safe_fact_diff_text(operation.estimate_basis, "estimate_basis")
+        if ";" in operation.estimate_basis:
+            raise FactLibraryError("estimate_basis cannot contain semicolons")
+        metadata["confirmed_at"] = operation.confirmed_at.isoformat()
+        metadata["source_run"] = run_id
+        metadata["estimate_basis"] = operation.estimate_basis
+    return metadata
+
+
+def _preferred_newline(lines: list[str]) -> str:
+    for line in lines:
+        _, ending = split_line_ending(line)
+        if ending:
+            return ending
+    return "\n"
+
+
+def _experience_anchor_line(lines: list[str], experience_id: str) -> int:
+    for line_number, line in enumerate(lines, start=1):
+        body, _ = split_line_ending(line)
+        _, metadata = parse_metadata(body, line_number)
+        if metadata.get("experience_id") == experience_id:
+            return line_number
+    raise FactLibraryError(f"experience not found for add operation: {experience_id}")
+
+
+def _apply_fact_diff_operation(
+    source_text: str,
+    operation: FactDiffOperation,
+    run_id: str,
+) -> str:
+    _assert_safe_fact_diff_text(operation.new_value, "new_value")
+    experiences, facts = parse_fact_records(source_text)
+    experience = experiences.get(operation.experience_id)
+    if not experience:
+        raise FactLibraryError(
+            f"unknown experience_id in fact diff: {operation.experience_id}"
+        )
+    lines = source_text.splitlines(keepends=True)
+    newline = _preferred_newline(lines)
+    if operation.action is DiffAction.REPLACE:
+        assert operation.target_fact_id is not None
+        existing = facts.get(operation.target_fact_id)
+        if not existing:
+            raise FactLibraryError(
+                f"unknown target_fact_id: {operation.target_fact_id}"
+            )
+        if existing.experience_id != operation.experience_id:
+            raise FactLibraryError("replace target belongs to another experience")
+        if existing.value != operation.old_value:
+            raise SourceChangedError(
+                f"replace old_value changed for {operation.target_fact_id}"
+            )
+        body, ending = split_line_ending(lines[existing.line_number - 1])
+        clean, old_metadata = parse_metadata(body, existing.line_number)
+        if BULLET_RE.match(clean):
+            prefix = "- "
+        elif ORDERED_RE.match(clean):
+            prefix = re.match(r"^\d+\.\s+", clean).group(0)  # type: ignore[union-attr]
+        else:
+            raise FactLibraryError("replace target is not a supported fact line")
+        metadata = _fact_diff_metadata(
+            operation,
+            operation.target_fact_id,
+            run_id,
+            old_metadata.get("experience_id"),
+        )
+        lines[existing.line_number - 1] = (
+            f"{prefix}{operation.new_value}{format_metadata(metadata)}{ending}"
+        )
+        return "".join(lines)
+
+    assert operation.proposed_fact_id is not None
+    if operation.proposed_fact_id in facts:
+        raise FactLibraryError(
+            f"proposed fact ID already exists: {operation.proposed_fact_id}"
+        )
+    assert_fact_belongs_to_experience(
+        operation.proposed_fact_id, operation.experience_id, 0
+    )
+    if experience.facts:
+        anchor_line = max(item.line_number for item in experience.facts)
+    else:
+        anchor_line = _experience_anchor_line(lines, operation.experience_id)
+    if lines and not split_line_ending(lines[anchor_line - 1])[1]:
+        lines[anchor_line - 1] += newline
+    metadata = _fact_diff_metadata(
+        operation, operation.proposed_fact_id, run_id
+    )
+    lines.insert(
+        anchor_line,
+        f"- {operation.new_value}{format_metadata(metadata)}{newline}",
+    )
+    return "".join(lines)
+
+
+def apply_fact_diff(
+    source: Path,
+    fact_diff: FactDiffArtifact,
+    *,
+    approval_granted: bool,
+) -> dict[str, object]:
+    if not approval_granted:
+        raise FactLibraryError("explicit approval is required before writing fact diff")
+    if fact_diff.confirmation_status is not ConfirmationStatus.APPROVED:
+        raise FactLibraryError("fact diff must be fully approved before writing")
+    if not fact_diff.operations:
+        raise FactLibraryError("approved fact diff has no write operations")
+    if fact_diff.result_fact_sha256 is not None:
+        raise FactLibraryError("fact diff was already applied")
+    source_text, source_raw = read_utf8(source)
+    original_hash = sha256_bytes(source_raw)
+    if original_hash != fact_diff.source_fact_sha256:
+        raise SourceChangedError(
+            "fact library changed after diff generation: "
+            f"expected {fact_diff.source_fact_sha256}, got {original_hash}"
+        )
+    updated = source_text
+    for operation in fact_diff.operations:
+        if operation.confirmation_status is not ConfirmationStatus.APPROVED:
+            raise FactLibraryError("every fact diff operation must be approved")
+        updated = _apply_fact_diff_operation(updated, operation, fact_diff.run_id)
+    _, updated_facts = parse_fact_records(updated)
+    for operation in fact_diff.operations:
+        fact_id = operation.target_fact_id or operation.proposed_fact_id
+        assert fact_id is not None
+        written = updated_facts.get(fact_id)
+        if not written or written.value != operation.new_value:
+            raise FactLibraryError(f"fact diff verification failed for {fact_id}")
+        if written.provenance != operation.provenance.value:
+            raise FactLibraryError(f"fact provenance verification failed for {fact_id}")
+    prefix = b"\xef\xbb\xbf" if source_raw.startswith(b"\xef\xbb\xbf") else b""
+    payload = prefix + updated.encode("utf-8")
+    temporary = source.with_name(f".{source.name}.{uuid.uuid4().hex}.tmp")
+    temporary.write_bytes(payload)
+    if sha256_bytes(temporary.read_bytes()) != sha256_bytes(payload):
+        raise FactLibraryError("temporary fact diff write failed verification")
+    os.replace(temporary, source)
+    written_text, written_raw = read_utf8(source)
+    parse_fact_records(written_text)
+    applied_hash = sha256_bytes(written_raw)
+    if applied_hash != sha256_bytes(payload):
+        raise FactLibraryError("written fact library hash does not match fact diff result")
+    return {
+        "applied_at": datetime.now(timezone.utc).isoformat(),
+        "source_path": str(source.resolve()),
+        "run_id": fact_diff.run_id,
+        "original_sha256": original_hash,
+        "applied_sha256": applied_hash,
+        "operation_ids": [item.operation_id for item in fact_diff.operations],
+    }
 
 
 def write_preview(source: Path, output_dir: Path) -> MigrationReport:

@@ -10,7 +10,7 @@ from typing import Any, Sequence
 
 from pydantic import BaseModel
 
-from fact_library import ExperienceRecord, FactRecord
+from fact_library import ExperienceRecord, FactRecord, apply_fact_diff
 from models import (
     AgentFailureArtifact,
     AgentRole,
@@ -31,12 +31,21 @@ from models import (
     ReferenceResearchArtifact,
     ReferenceResearchMode,
     RoleFamily,
+    RunCheckpointArtifact,
     RunManifestArtifact,
     SourceDigests,
     SourceType,
     assert_state_transition,
 )
-from storage import RunStage, approve_run, begin_run, create_run_id
+from storage import (
+    RunStage,
+    approve_run,
+    begin_run,
+    create_run_id,
+    load_checkpoint,
+    remove_checkpoint,
+    save_checkpoint,
+)
 from validators import validate_fusion_content, validate_run_artifact_completeness
 
 
@@ -285,7 +294,7 @@ def render_content_review(
 @dataclass
 class CoordinatorRun:
     normalized: NormalizedRunInput
-    stage: RunStage
+    stage: RunStage | None = None
     state: ContentState = ContentState.NOT_STARTED
     jd_analysis: JDAnalysisArtifact | None = None
     evidence_map: EvidenceMapArtifact | None = None
@@ -304,8 +313,7 @@ class CoordinatorRun:
 
     @classmethod
     def create(cls, normalized: NormalizedRunInput) -> "CoordinatorRun":
-        stage = begin_run(normalized.application_dir, normalized.packet.run_id)
-        run = cls(normalized=normalized, stage=stage)
+        run = cls(normalized=normalized)
         run.reference_research = ReferenceResearchArtifact(
             run_id=normalized.packet.run_id,
             created_at=normalized.packet.created_at,
@@ -315,6 +323,37 @@ class CoordinatorRun:
         )
         run._transition(ContentState.ANALYZING)
         return run
+
+    @classmethod
+    def resume(cls, normalized: NormalizedRunInput) -> "CoordinatorRun":
+        checkpoint = load_checkpoint(
+            normalized.application_dir, normalized.packet.run_id
+        )
+        if checkpoint.source_digests != normalized.packet.source_digests:
+            raise AgentHandoffError(
+                "checkpoint inputs changed; start a new run with fresh analysis"
+            )
+        if checkpoint.input_packet.application_dir != normalized.packet.application_dir:
+            raise AgentHandoffError("checkpoint application directory does not match")
+        if checkpoint.input_packet.role_family is not normalized.packet.role_family:
+            raise AgentHandoffError("checkpoint role family does not match")
+        restored_input = NormalizedRunInput(
+            packet=checkpoint.input_packet,
+            application_dir=normalized.application_dir,
+            jd_text=normalized.jd_text,
+            fact_text=normalized.fact_text,
+            preferences_text=normalized.preferences_text,
+            reference_cards_text=normalized.reference_cards_text,
+        )
+        return cls(
+            normalized=restored_input,
+            state=checkpoint.state,
+            jd_analysis=checkpoint.jd_analysis,
+            evidence_map=checkpoint.evidence_map,
+            fact_diff=checkpoint.fact_diff,
+            execution_mode=checkpoint.execution_mode,
+            reference_research=checkpoint.reference_research,
+        )
 
     @property
     def packet(self) -> NormalizedInputPacket:
@@ -342,6 +381,30 @@ class CoordinatorRun:
         assert_state_transition(self.state, target)
         self.state = target
 
+    def _save_gate_checkpoint(self) -> Path:
+        if not all(
+            [
+                self.reference_research,
+                self.jd_analysis,
+                self.evidence_map,
+                self.fact_diff,
+            ]
+        ):
+            raise OrchestrationError("gate checkpoint artifacts are incomplete")
+        checkpoint = RunCheckpointArtifact(
+            run_id=self.packet.run_id,
+            created_at=self.packet.created_at,
+            source_digests=self.packet.source_digests,
+            state=self.state,
+            execution_mode=self.execution_mode,
+            input_packet=self.packet,
+            reference_research=self.reference_research,
+            jd_analysis=self.jd_analysis,
+            evidence_map=self.evidence_map,
+            fact_diff=self.fact_diff,
+        )
+        return save_checkpoint(self.normalized.application_dir, checkpoint)
+
     def record_reference_research(self, artifact: ReferenceResearchArtifact) -> None:
         if self.state is not ContentState.ANALYZING:
             raise OrchestrationError("reference routing must finish before JD analysis")
@@ -366,15 +429,24 @@ class CoordinatorRun:
             raise AgentHandoffError("JD analysis role family does not match the approved packet")
         if evidence_map.selection_approved:
             raise HumanGateError("selection cannot be pre-approved by the coordinator")
-        if fact_diff.source_fact_sha256 != self.packet.source_digests.fact_snapshot_sha256:
+        current_fact_hash = self.packet.source_digests.fact_snapshot_sha256
+        if fact_diff.result_fact_sha256 is not None:
+            if fact_diff.result_fact_sha256 != current_fact_hash:
+                raise AgentHandoffError("applied fact diff result hash is stale")
+        elif fact_diff.source_fact_sha256 != current_fact_hash:
             raise AgentHandoffError("fact diff source hash is stale")
         self.jd_analysis = jd_analysis
         self.evidence_map = evidence_map
         self.fact_diff = fact_diff
-        if fact_diff.questions or fact_diff.operations:
+        unresolved = (
+            fact_diff.confirmation_status is ConfirmationStatus.PENDING
+            and bool(fact_diff.questions or fact_diff.operations)
+        )
+        if unresolved:
             self._transition(ContentState.NEEDS_INPUT)
         else:
             self._transition(ContentState.AWAITING_SELECTION_APPROVAL)
+        self._save_gate_checkpoint()
 
     def resolve_fact_diff(self, fact_diff: FactDiffArtifact) -> None:
         if self.state is not ContentState.NEEDS_INPUT:
@@ -382,8 +454,78 @@ class CoordinatorRun:
         _same_envelope(self.packet, fact_diff)
         if fact_diff.confirmation_status is ConfirmationStatus.PENDING:
             raise HumanGateError("fact diff still requires explicit user confirmation")
+        if (
+            fact_diff.confirmation_status is ConfirmationStatus.APPROVED
+            and fact_diff.operations
+        ):
+            raise HumanGateError(
+                "approved fact operations must be atomically applied before selection"
+            )
         self.fact_diff = fact_diff
         self._transition(ContentState.AWAITING_SELECTION_APPROVAL)
+        self._save_gate_checkpoint()
+
+    def apply_confirmed_fact_diff(
+        self,
+        fact_diff: FactDiffArtifact,
+        *,
+        approval_granted: bool,
+    ) -> dict[str, object]:
+        if self.state is not ContentState.NEEDS_INPUT:
+            raise HumanGateError("no fact-diff write is currently pending")
+        _same_envelope(self.packet, fact_diff)
+        if not fact_diff.operations:
+            raise HumanGateError("fact diff has no write operations")
+        profile_path = (
+            self.normalized.application_dir.parents[1]
+            / "profile"
+            / "01-candidate-profile.md"
+        )
+        result = apply_fact_diff(
+            profile_path,
+            fact_diff,
+            approval_granted=approval_granted,
+        )
+        fact_bytes = profile_path.read_bytes()
+        applied_hash = sha256_bytes(fact_bytes)
+        if result["applied_sha256"] != applied_hash:
+            raise OrchestrationError("fact diff result hash verification failed")
+        updated_digests = self.packet.source_digests.model_copy(
+            update={"fact_snapshot_sha256": applied_hash}
+        )
+        updated_packet = self.packet.model_copy(
+            update={"source_digests": updated_digests}
+        )
+        updated_diff = fact_diff.model_copy(
+            update={
+                "source_digests": updated_digests,
+                "result_fact_sha256": applied_hash,
+            }
+        )
+        assert self.reference_research is not None
+        assert self.jd_analysis is not None
+        assert self.evidence_map is not None
+        self.normalized = NormalizedRunInput(
+            packet=NormalizedInputPacket.model_validate(updated_packet.model_dump()),
+            application_dir=self.normalized.application_dir,
+            jd_text=self.normalized.jd_text,
+            fact_text=fact_bytes.decode("utf-8-sig"),
+            preferences_text=self.normalized.preferences_text,
+            reference_cards_text=self.normalized.reference_cards_text,
+        )
+        self.reference_research = self.reference_research.model_copy(
+            update={"source_digests": updated_digests}
+        )
+        self.jd_analysis = self.jd_analysis.model_copy(
+            update={"source_digests": updated_digests}
+        )
+        self.evidence_map = self.evidence_map.model_copy(
+            update={"source_digests": updated_digests}
+        )
+        self.fact_diff = FactDiffArtifact.model_validate(updated_diff.model_dump())
+        self._transition(ContentState.ANALYZING)
+        self._save_gate_checkpoint()
+        return result
 
     def approve_selection(self, evidence_map: EvidenceMapArtifact) -> None:
         if self.state is not ContentState.AWAITING_SELECTION_APPROVAL:
@@ -412,6 +554,7 @@ class CoordinatorRun:
             reference_cards_text=self.normalized.reference_cards_text,
         )
         self._transition(ContentState.DRAFTING)
+        self._save_gate_checkpoint()
 
     def writer_packet(
         self,
@@ -480,6 +623,7 @@ class CoordinatorRun:
         if choice != ExecutionMode.SINGLE_AGENT_DEGRADED.value:
             raise HumanGateError("unsupported subagent fallback choice")
         self.execution_mode = ExecutionMode.SINGLE_AGENT_DEGRADED
+        self._save_gate_checkpoint()
         return choice
 
     def record_single_degraded_draft(self, writer: DraftArtifact) -> None:
@@ -615,6 +759,10 @@ class CoordinatorRun:
             raise OrchestrationError("blind-dual run is missing ASu draft")
         if self.execution_mode is ExecutionMode.SINGLE_AGENT_DEGRADED and not self.asu_failure:
             raise OrchestrationError("degraded run is missing the unavailable-agent record")
+        if self.stage is None:
+            self.stage = begin_run(
+                self.normalized.application_dir, self.packet.run_id
+            )
         self.stage.write_model("input-packet.json", self.packet)
         self.stage.write_model("jd-analysis.json", self.jd_analysis)
         self.stage.write_model("evidence-map.json", self.evidence_map)
@@ -662,6 +810,7 @@ class CoordinatorRun:
             revision_count=len(self.fusion_history) - 1,
         )
         self.committed_path = self.stage.commit(manifest)
+        remove_checkpoint(self.normalized.application_dir, self.packet.run_id)
         missing = validate_run_artifact_completeness(self.committed_path)
         if missing:
             raise OrchestrationError(

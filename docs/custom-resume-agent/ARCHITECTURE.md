@@ -253,9 +253,11 @@ not_started
 ## 11. 写入与一致性
 
 - 新运行先写入临时运行目录；全部必需产物通过 Schema 后，使用同一文件系统内原子重命名提交为最终 `run_id` 目录。
+- `needs_input`、`awaiting_selection_approval` 与 `drafting` 人工门禁使用 `resume-content/.pending/<run_id>.json` 原子 checkpoint 跨进程恢复；它不是已提交历史运行，最终运行提交成功后立即移除。
 - 已提交运行目录不可修改；审计修订作为同一运行中的有序 revision 产物，在提交前完成。
 - `current.json` 只在用户批准且硬校验通过后原子替换。
 - 事实差异写回前再次校验源事实库哈希；哈希变化则停止并重新生成 diff。
+- 已批准的 `add/replace` 操作原子写回后记录结果哈希，并把运行恢复为 `analyzing`：所有分析和证据映射必须基于新事实快照重新生成，之后才可进入选材批准。
 - manifest 摘要与 `current.json` 必须由同一提交动作更新；校验器检测不一致。
 
 ## 12. 错误与降级

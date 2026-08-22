@@ -12,7 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS_DIR = REPO_ROOT / ".agents" / "skills" / "custom-resume" / "scripts"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
-from fact_library import parse_fact_records  # noqa: E402
+from fact_library import FactLibraryError, parse_fact_records  # noqa: E402
 from models import (  # noqa: E402
     AuditArtifact,
     AuditDisposition,
@@ -22,9 +22,12 @@ from models import (  # noqa: E402
     CoverageLevel,
     DraftAgent,
     DraftArtifact,
+    DiffAction,
     EvidenceMapArtifact,
     EvidenceMapping,
     FactDiffArtifact,
+    FactDiffOperation,
+    FactProvenance,
     FusionAction,
     FusionArtifact,
     FusionDecision,
@@ -54,8 +57,14 @@ from orchestrator import (  # noqa: E402
     OrchestrationError,
     normalize_run_input,
 )
-from storage import load_run, validate_pointer_consistency  # noqa: E402
+from storage import (  # noqa: E402
+    checkpoint_path,
+    load_checkpoint,
+    load_run,
+    validate_pointer_consistency,
+)
 from validators import validate_run_artifact_completeness  # noqa: E402
+from validate_run import validate_run_directory  # noqa: E402
 
 
 NOW = datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc)
@@ -371,6 +380,13 @@ def test_directory_text_and_url_inputs_normalize_without_executing_jd(tmp_path: 
     assert url_input.packet.source_type is SourceType.URL
 
 
+def test_run_validator_rejects_non_run_directory(tmp_path: Path) -> None:
+    result = validate_run_directory(tmp_path)
+    assert result["passed"] is False
+    assert result["review_ready"] is False
+    assert "resume-content/runs" in result["findings"][0]
+
+
 def test_text_and_url_inputs_require_confirmed_company_and_role(tmp_path: Path) -> None:
     repo = prepare_repo(tmp_path)
     with pytest.raises(HumanGateError, match="confirmed company and role"):
@@ -444,6 +460,60 @@ def test_human_selection_gate_and_blind_writer_packets(tmp_path: Path) -> None:
     }
 
 
+def test_human_gate_checkpoint_resumes_same_run_across_processes(
+    tmp_path: Path,
+) -> None:
+    initial_input = normalized(tmp_path)
+    run = CoordinatorRun.create(initial_input)
+    jd, evidence, fact_diff = analysis_artifacts(run.packet)
+    run.record_analysis(jd, evidence, fact_diff)
+
+    path = checkpoint_path(run.normalized.application_dir, RUN_ID)
+    assert path.is_file()
+    checkpoint = load_checkpoint(run.normalized.application_dir, RUN_ID)
+    assert checkpoint.state is ContentState.AWAITING_SELECTION_APPROVAL
+    assert checkpoint.input_packet.approved_requirement_ids == []
+
+    resume_input = normalize_run_input(
+        tmp_path,
+        source_type=SourceType.DIRECTORY,
+        source_locator="applications/测试公司_AI产品经理/jd.md",
+        application_dir=initial_input.application_dir,
+        now=NOW,
+        run_id=RUN_ID,
+    )
+    resumed = CoordinatorRun.resume(resume_input)
+    assert resumed.state is ContentState.AWAITING_SELECTION_APPROVAL
+    assert resumed.jd_analysis == jd
+    resumed.approve_selection(approved_evidence(evidence))
+
+    drafting = load_checkpoint(resumed.normalized.application_dir, RUN_ID)
+    assert drafting.state is ContentState.DRAFTING
+    assert drafting.input_packet.approved_requirement_ids == ["REQ-001"]
+    resumed_again = CoordinatorRun.resume(resume_input)
+    experiences, facts = parse_fact_records(resumed_again.normalized.fact_text)
+    assert resumed_again.writer_packet(experiences, facts)["confirmed_facts"]
+
+
+def test_checkpoint_resume_rejects_changed_frozen_inputs(tmp_path: Path) -> None:
+    run = CoordinatorRun.create(normalized(tmp_path))
+    jd, evidence, fact_diff = analysis_artifacts(run.packet)
+    run.record_analysis(jd, evidence, fact_diff)
+    (tmp_path / "profile" / "preferences.md").write_text(
+        "偏好已变化。", encoding="utf-8"
+    )
+    changed = normalize_run_input(
+        tmp_path,
+        source_type=SourceType.DIRECTORY,
+        source_locator="applications/测试公司_AI产品经理/jd.md",
+        application_dir=run.normalized.application_dir,
+        now=NOW,
+        run_id=RUN_ID,
+    )
+    with pytest.raises(AgentHandoffError, match="inputs changed"):
+        CoordinatorRun.resume(changed)
+
+
 def test_fact_diff_requires_explicit_resolution(tmp_path: Path) -> None:
     run = CoordinatorRun.create(normalized(tmp_path))
     jd, evidence, fact_diff = analysis_artifacts(run.packet)
@@ -472,6 +542,51 @@ def test_fact_diff_requires_explicit_resolution(tmp_path: Path) -> None:
     assert run.state is ContentState.AWAITING_SELECTION_APPROVAL
 
 
+def test_approved_fact_operations_write_atomically_then_require_reanalysis(
+    tmp_path: Path,
+) -> None:
+    run = CoordinatorRun.create(normalized(tmp_path))
+    jd, evidence, fact_diff = analysis_artifacts(run.packet)
+    pending_payload = fact_diff.model_dump(mode="python")
+    pending_payload["operations"] = [
+        FactDiffOperation(
+            operation_id="FD-001",
+            action=DiffAction.ADD,
+            experience_id="EXP-PROJECT-001",
+            proposed_fact_id="FACT-PROJECT-001-03",
+            new_value="补充了用户确认的测试流程。",
+            provenance=FactProvenance.OBSERVED,
+        ).model_dump(mode="python")
+    ]
+    pending = FactDiffArtifact.model_validate(pending_payload)
+    run.record_analysis(jd, evidence, pending)
+    assert run.state is ContentState.NEEDS_INPUT
+
+    approved_payload = pending.model_dump(mode="python")
+    approved_payload["confirmation_status"] = ConfirmationStatus.APPROVED
+    approved_payload["operations"][0]["confirmation_status"] = (
+        ConfirmationStatus.APPROVED
+    )
+    approved_payload["operations"][0]["confirmed_at"] = NOW
+    approved = FactDiffArtifact.model_validate(approved_payload)
+    with pytest.raises(FactLibraryError, match="explicit approval"):
+        run.apply_confirmed_fact_diff(approved, approval_granted=False)
+
+    result = run.apply_confirmed_fact_diff(approved, approval_granted=True)
+    assert run.state is ContentState.ANALYZING
+    assert run.fact_diff is not None
+    assert run.fact_diff.result_fact_sha256 == result["applied_sha256"]
+    _, facts = parse_fact_records(run.normalized.fact_text)
+    assert facts["FACT-PROJECT-001-03"].value == "补充了用户确认的测试流程。"
+    checkpoint = load_checkpoint(run.normalized.application_dir, RUN_ID)
+    assert checkpoint.state is ContentState.ANALYZING
+    assert checkpoint.fact_diff.result_fact_sha256 == result["applied_sha256"]
+
+    refreshed_jd, refreshed_evidence, _ = analysis_artifacts(run.packet)
+    run.record_analysis(refreshed_jd, refreshed_evidence, run.fact_diff)
+    assert run.state is ContentState.AWAITING_SELECTION_APPROVAL
+
+
 def test_full_content_only_flow_commits_reviewable_run_and_pointer(tmp_path: Path) -> None:
     run = CoordinatorRun.create(normalized(tmp_path))
     jd, evidence, fact_diff = analysis_artifacts(run.packet)
@@ -489,6 +604,10 @@ def test_full_content_only_flow_commits_reviewable_run_and_pointer(tmp_path: Pat
     assert run.record_audit(passing_audit(run)) is True
     review_run = run.commit_for_review()
     assert review_run.is_dir()
+    assert not checkpoint_path(run.normalized.application_dir, RUN_ID).exists()
+    run_validation = validate_run_directory(review_run)
+    assert run_validation["passed"] is True
+    assert run_validation["review_ready"] is True
     assert not (run.normalized.application_dir / "resume-content" / "current.json").exists()
     assert load_run(run.normalized.application_dir, RUN_ID).state is ContentState.NEEDS_CONTENT_REVIEW
     with pytest.raises(HumanGateError, match="explicit content approval"):

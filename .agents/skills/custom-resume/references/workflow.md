@@ -16,7 +16,9 @@ This reference is the runtime summary of the confirmed V1 workflow. `docs/custom
 4. Map requirements to confirmed facts and evidence levels.
 5. Ask at most five high-value, option-style fact questions when needed.
 6. Present one consolidated fact diff; write it only after explicit user confirmation.
+   After an approved add/replace write, freeze the result hash and rerun analysis against the updated fact snapshot before selection approval.
 7. Obtain user approval for evidence mapping, experience selection, and known gaps.
+   Persist `needs_input`, `awaiting_selection_approval`, and approved `drafting` gates as a recoverable checkpoint before yielding for user input.
 8. Run Writer and ASu Writer in isolated read-only contexts using equivalent input packets.
 9. Fuse at bullet level and record every selection or rewrite decision.
 10. Run deterministic validation, then independent truth and HR-quality audit.

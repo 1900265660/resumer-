@@ -20,6 +20,7 @@ from models import (
     CurrentPointer,
     ReferencedFactDigest,
     ResumeContentSummary,
+    RunCheckpointArtifact,
     RunManifestArtifact,
     RunId,
 )
@@ -195,6 +196,49 @@ def begin_run(application_dir: Path, run_id: str) -> RunStage:
     stage_path = staging_root / f"{run_id}_{uuid.uuid4().hex}"
     stage_path.mkdir()
     return RunStage(application_dir=application_dir, run_id=run_id, path=stage_path)
+
+
+def checkpoint_path(application_dir: Path, run_id: str) -> Path:
+    try:
+        validated = TypeAdapter(RunId).validate_python(run_id)
+    except ValidationError as error:
+        raise StorageError(f"invalid checkpoint run ID: {run_id}") from error
+    return (
+        application_dir.resolve()
+        / "resume-content"
+        / ".pending"
+        / f"{validated}.json"
+    )
+
+
+def save_checkpoint(
+    application_dir: Path, checkpoint: RunCheckpointArtifact
+) -> Path:
+    application_dir = application_dir.resolve()
+    final_path = application_dir / "resume-content" / "runs" / checkpoint.run_id
+    if final_path.exists():
+        raise RunAlreadyExistsError(f"run already exists: {checkpoint.run_id}")
+    target = checkpoint_path(application_dir, checkpoint.run_id)
+    _replace_json(target, checkpoint.model_dump(mode="json"))
+    return target
+
+
+def load_checkpoint(application_dir: Path, run_id: str) -> RunCheckpointArtifact:
+    path = checkpoint_path(application_dir, run_id)
+    try:
+        return RunCheckpointArtifact.model_validate(_read_json(path))
+    except ValidationError as error:
+        raise RunIntegrityError(f"invalid run checkpoint: {path}") from error
+
+
+def remove_checkpoint(application_dir: Path, run_id: str) -> bool:
+    path = checkpoint_path(application_dir, run_id)
+    if not path.exists():
+        return False
+    if not path.is_file():
+        raise RunIntegrityError(f"checkpoint path is not a file: {path}")
+    path.unlink()
+    return True
 
 
 def load_run(application_dir: Path, run_id: str) -> RunManifestArtifact:

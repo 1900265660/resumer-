@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -13,11 +14,22 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 from fact_library import (  # noqa: E402
     FactLibraryError,
     SourceChangedError,
+    apply_fact_diff,
     apply_preview,
     assert_source_unchanged,
     migrate_text,
+    parse_fact_records,
+    sha256_bytes,
     strip_metadata,
     write_preview,
+)
+from models import (  # noqa: E402
+    ConfirmationStatus,
+    DiffAction,
+    FactDiffArtifact,
+    FactDiffOperation,
+    FactProvenance,
+    SourceDigests,
 )
 
 
@@ -48,6 +60,26 @@ SAMPLE = """# 候选人事实库（已确认）
 
 - 工具：Excel、Python。
 """
+
+NOW = datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc)
+RUN_ID = "cr_20260822T120000_abc123"
+
+
+def approved_diff(
+    source_hash: str, operation: FactDiffOperation
+) -> FactDiffArtifact:
+    return FactDiffArtifact(
+        run_id=RUN_ID,
+        created_at=NOW,
+        source_digests=SourceDigests(
+            jd_sha256="a" * 64,
+            fact_snapshot_sha256=source_hash,
+            preferences_sha256="b" * 64,
+        ),
+        source_fact_sha256=source_hash,
+        confirmation_status=ConfirmationStatus.APPROVED,
+        operations=[operation],
+    )
 
 
 def test_migration_only_adds_metadata_and_is_idempotent() -> None:
@@ -186,7 +218,6 @@ def test_apply_rejects_source_or_preview_tampering(tmp_path: Path) -> None:
             output_dir / "apply-report.json",
             approval_granted=True,
         )
-
     source.write_text(SAMPLE, encoding="utf-8")
     preview = output_dir / "candidate-profile.with-ids.md"
     preview.write_text(
@@ -201,3 +232,67 @@ def test_apply_rejects_source_or_preview_tampering(tmp_path: Path) -> None:
             output_dir / "apply-report.json",
             approval_granted=True,
         )
+
+
+def test_approved_fact_diff_adds_accepted_estimate_atomically(
+    tmp_path: Path,
+) -> None:
+    migrated, _ = migrate_text(SAMPLE)
+    source = tmp_path / "profile.md"
+    source.write_text(migrated, encoding="utf-8")
+    source_hash = sha256_bytes(source.read_bytes())
+    operation = FactDiffOperation(
+        operation_id="FD-001",
+        action=DiffAction.ADD,
+        experience_id="EXP-WORK-001",
+        proposed_fact_id="FACT-WORK-001-03",
+        new_value="访谈范围估计为 12–15 位用户。",
+        provenance=FactProvenance.ACCEPTED_ESTIMATE,
+        estimate_basis="用户确认模型建议区间",
+        confirmation_status=ConfirmationStatus.APPROVED,
+        confirmed_at=NOW,
+    )
+    result = apply_fact_diff(
+        source,
+        approved_diff(source_hash, operation),
+        approval_granted=True,
+    )
+    _, facts = parse_fact_records(source.read_text(encoding="utf-8"))
+    written = facts["FACT-WORK-001-03"]
+    assert written.value == operation.new_value
+    assert written.provenance == "accepted_estimate"
+    assert written.metadata["source_run"] == RUN_ID
+    assert written.metadata["estimate_basis"] == "用户确认模型建议区间"
+    assert result["original_sha256"] == source_hash
+    assert result["applied_sha256"] == sha256_bytes(source.read_bytes())
+
+
+def test_approved_fact_diff_replaces_exact_old_value_and_guards_source(
+    tmp_path: Path,
+) -> None:
+    migrated, _ = migrate_text(SAMPLE)
+    source = tmp_path / "profile.md"
+    source.write_text(migrated, encoding="utf-8")
+    source_hash = sha256_bytes(source.read_bytes())
+    operation = FactDiffOperation(
+        operation_id="FD-001",
+        action=DiffAction.REPLACE,
+        experience_id="EXP-WORK-001",
+        target_fact_id="FACT-WORK-001-02",
+        old_value="完成原型与验收。",
+        new_value="完成原型、测试与验收。",
+        provenance=FactProvenance.OBSERVED,
+        confirmation_status=ConfirmationStatus.APPROVED,
+        confirmed_at=NOW,
+    )
+    diff = approved_diff(source_hash, operation)
+    with pytest.raises(FactLibraryError, match="explicit approval"):
+        apply_fact_diff(source, diff, approval_granted=False)
+    source.write_text(migrated + "\n", encoding="utf-8")
+    with pytest.raises(SourceChangedError, match="changed after diff generation"):
+        apply_fact_diff(source, diff, approval_granted=True)
+    source.write_text(migrated, encoding="utf-8")
+    apply_fact_diff(source, diff, approval_granted=True)
+    _, facts = parse_fact_records(source.read_text(encoding="utf-8"))
+    assert facts["FACT-WORK-001-02"].value == "完成原型、测试与验收。"
+    assert facts["FACT-WORK-001-02"].provenance == "observed"
