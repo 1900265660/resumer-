@@ -1,19 +1,19 @@
 # Custom Resume Artifact Contract
 
-This reference lists the public artifact boundaries that T03 will implement with strict Pydantic 2 models. It is not a substitute for the models.
+This reference summarizes the public artifact boundaries implemented by the strict Pydantic 2 models in `scripts/models.py`. The code models remain authoritative.
 
 ## Shared envelope
 
-Every JSON artifact will include:
+Every JSON artifact includes:
 
 - `schema_version`
 - `run_id`
 - `created_at`
 - source input digests
 
-Unknown fields will be rejected unless a later documented schema revision explicitly allows them.
+Unknown fields are rejected unless a later documented schema revision explicitly allows them.
 
-## Planned artifacts
+## Artifacts
 
 | File | Purpose |
 |---|---|
@@ -26,12 +26,14 @@ Unknown fields will be rejected unless a later documented schema revision explic
 | `fusion.json` | Fused bullets, source decisions, rewrite reasons, and fact IDs |
 | `audit.json` | Deterministic gates, truth audit, quality scores, revisions, and overrides |
 
-## Planned content states
+`fact-diff.json` may contain at most five structured option-style questions. The number of confirmed add/replace operations is not coupled to the question count.
+
+## Content states
 
 `not_started → analyzing → needs_input → awaiting_selection_approval → drafting → auditing → needs_content_review → approved`
 
 `failed` is an execution failure state. `stale` applies when a fact referenced by an approved run changes.
 
-## Current availability
+## Implementation
 
-The Pydantic models and validators do not exist in T02. Callers must not create ad hoc JSON that claims compliance with this contract.
+The models, strict enumerations, cross-field validators, transition guard, and JSON Schema exporter are implemented in `scripts/models.py`. Later tasks add persistence, orchestration, and full content validation; callers must not treat the existence of these models as proof that a complete run is operational.
