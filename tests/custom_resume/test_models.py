@@ -264,7 +264,7 @@ def test_fusion_drop_and_output_shapes_are_mutually_exclusive() -> None:
 
 def test_schema_export_produces_valid_json_for_all_artifacts(tmp_path: Path) -> None:
     written = export_json_schemas(tmp_path)
-    assert len(written) == 9
+    assert len(written) == 10
     assert {path.name for path in written} == {
         "input-packet.schema.json",
         "run.schema.json",
@@ -275,6 +275,7 @@ def test_schema_export_produces_valid_json_for_all_artifacts(tmp_path: Path) -> 
         "fusion.schema.json",
         "audit.schema.json",
         "current.schema.json",
+        "agent-failure.schema.json",
     }
     for path in written:
         schema = json.loads(path.read_text(encoding="utf-8"))

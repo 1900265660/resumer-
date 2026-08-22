@@ -64,7 +64,7 @@
 ## T05 事实 ID 迁移写回
 
 - 优先级：P0
-- 状态：in_progress（等待用户批准迁移差异）
+- 状态：completed
 - 目标：把已批准的 ID-only diff 原子写入事实库。
 - 依赖：T04 和用户明确批准 diff。
 - 范围：仅增加隐藏元数据；生成备份摘要和验证报告。
@@ -84,7 +84,7 @@
 ## T07 Prompt 与只读自定义代理
 
 - 优先级：P0
-- 状态：pending
+- 状态：completed
 - 目标：实现 JD 分析、Writer、ASu Writer、Fusion、Auditor Prompt 和三个项目级只读代理。
 - 依赖：T03、T05。
 - 范围：`.agents/prompts/custom-resume/` 和 `.codex/agents/`；继承当前模型，不配置外部 Provider。

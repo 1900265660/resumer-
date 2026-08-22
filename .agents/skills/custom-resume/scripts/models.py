@@ -90,6 +90,13 @@ class DraftAgent(StringEnum):
     ASU_WRITER = "asu_writer"
 
 
+class AgentRole(StringEnum):
+    COORDINATOR = "coordinator"
+    WRITER = "writer"
+    ASU_WRITER = "asu_writer"
+    AUDITOR = "auditor"
+
+
 class ResumeSectionName(StringEnum):
     EDUCATION = "教育经历"
     WORK = "实习/工作经历"
@@ -609,6 +616,19 @@ class RunError(StrictModel):
     recoverable: bool
 
 
+class AgentFailureArtifact(ArtifactBase):
+    role: AgentRole
+    error_code: str = Field(pattern=r"^[A-Z][A-Z0-9_]+$")
+    message: str = Field(min_length=1)
+    missing_inputs: list[str] = Field(default_factory=list)
+    retryable: bool
+
+    @field_validator("missing_inputs")
+    @classmethod
+    def missing_inputs_must_be_unique(cls, value: list[str]) -> list[str]:
+        return _ensure_unique(value, "missing_inputs")
+
+
 class RunManifestArtifact(ArtifactBase):
     state: ContentState
     input_packet: NormalizedInputPacket
@@ -736,6 +756,7 @@ ARTIFACT_MODELS: dict[str, type[BaseModel]] = {
     "fusion": FusionArtifact,
     "audit": AuditArtifact,
     "current": CurrentPointer,
+    "agent-failure": AgentFailureArtifact,
 }
 
 
