@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "rounds": [
+    {
+      "round": "preflight-1",
+      "accepted_as_release_evidence": false,
+      "reason": "The coordinator failed to inspect deterministic findings before blind quality scoring; the new education bullet changed 2027/06 to a unit-bearing date and triggered UNSUPPORTED_NUMERIC_CLAIM."
+    },
+    {
+      "round": "preflight-2",
+      "accepted_as_release_evidence": false,
+      "reason": "A language revision was scored on the same deterministic-invalid package and therefore remained protocol-invalid."
+    },
+    {
+      "round": "preflight-3",
+      "accepted_as_release_evidence": false,
+      "reason": "An evidence-density revision was scored before the deterministic date finding was corrected and therefore remained protocol-invalid."
+    },
+    {
+      "round": 1,
+      "accepted_as_release_evidence": true,
+      "reason": "The date was restored to the exact fact representation, both lanes had zero deterministic findings, and a fresh blind Auditor independently passed truth and all four absolute quality gates for the extension lane."
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+[
+  {
+    "case_id": "game-production",
+    "fact_snapshot_sha256": "4dedb5eeac04260505862a7f286da2983624dc8a68437db7dfc1426c9bea571d",
+    "evaluation_mode": "blind",
+    "legacy": {
+      "truth_passed": true,
+      "hard_findings": [],
+      "scores": {
+        "jd_coverage": 6.5,
+        "evidence_depth": 8.2,
+        "hr_scan": 7.2,
+        "language_naturalness": 8.6
+      }
+    },
+    "new": {
+      "truth_passed": true,
+      "hard_findings": [],
+      "scores": {
+        "jd_coverage": 8.3,
+        "evidence_depth": 8.3,
+        "hr_scan": 8.7,
+        "language_naturalness": 8.4
+      }
+    },
+    "evaluator_notes": [
+      "两份候选材料的经历标题均与对应 experience_id 一致，所有正向 Markdown bullet 均可由同经历 trace 所列 fact_ids 完整支持。",
+      "未发现活动项目冒充游戏版本管线、排班冒充产能分析或其他事实越界。",
+      "候选 A 的表达紧凑，游戏项目数据与项目协作证据清楚，但未直接说明正式版本管线、敏捷协作、系统化风险跟踪及产能、人效分析等关键缺口。",
+      "候选 B 保留同等事实证据，并以负向能力边界诚实披露事实快照未覆盖的正式版本管线、敏捷、系统化风险和产能、人效经验；该披露不构成虚构正向能力。",
+      "候选 B 的主要岗位缺口可被更快识别，因此 JD 覆盖和 HR 扫描得分高于候选 A。"
+    ]
+  }
+]

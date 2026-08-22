@@ -38,8 +38,11 @@ PROMPT_DIR = REPO_ROOT / ".agents" / "prompts" / "custom-resume"
 AGENT_DIR = REPO_ROOT / ".codex" / "agents"
 PROMPTS = {
     "jd-analysis.md",
+    "jd-analysis-game-production.md",
     "writer.md",
+    "writer-game-production.md",
     "asu-writer.md",
+    "asu-writer-game-production.md",
     "fusion.md",
     "auditor.md",
 }
@@ -77,6 +80,10 @@ def test_writer_prompts_preserve_blind_isolation() -> None:
     assert "WRITER-NNN" not in asu
     assert "blind to all other drafts" in writer
     assert "blind to all other drafts" in asu
+    game_writer = (PROMPT_DIR / "writer-game-production.md").read_text(encoding="utf-8")
+    game_asu = (PROMPT_DIR / "asu-writer-game-production.md").read_text(encoding="utf-8")
+    assert "blind to all other drafts" in game_writer
+    assert "blind to all other drafts" in game_asu
 
 
 def test_custom_agent_configs_are_read_only_and_model_agnostic() -> None:

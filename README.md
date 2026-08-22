@@ -18,7 +18,7 @@
 根目录的 [AGENTS.md](AGENTS.md) 是总规则；两个可发现的工作技能在 `.agents/skills/`：
 
 - `china-job-search`：导入经历、读取任意格式岗位清单、评分、定制材料和归档。
-- `custom-resume`：针对单个中文 AI 产品经理 JD 生成可追溯的定制内容、双稿融合和内容验收；不生成 HTML/PDF，不投递。可用 `$custom-resume` 或“调用最新的简历 Skill”显式进入。
+- `custom-resume`：针对单个中文 AI 产品经理或游戏研发/项目管理型产品 PM JD，生成可追溯的定制内容、双稿融合和内容验收；不生成 HTML/PDF，不投递。可用 `$custom-resume` 或“调用最新的简历 Skill”显式进入。
 - `browser-application`：浏览器填表和最终投递，严格要求人工批准。
 
 项目还固定导入了 MIT 许可的 [ASu-skills](https://github.com/Hisn00w/ASu-skills) 快照：`/asu`、`/asu-resume`、`/resume`、`/offer` 与 `/contributor`。这些技能用于经历表达、简历制作、投递进度和开源贡献；它们仍受本项目的事实库与投递安全规则约束。导入版本见 `.agents/third_party/asu-skills/IMPORT.md`。

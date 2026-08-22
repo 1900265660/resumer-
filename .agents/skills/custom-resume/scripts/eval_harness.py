@@ -21,7 +21,22 @@ FIXED_CATEGORIES = {
     "consumer_commerce_content",
     "technical_capability_gap",
 }
+SUPPORTED_EVAL_CATEGORIES = FIXED_CATEGORIES | {"game_production_pm"}
 DIMENSIONS = ("jd_coverage", "evidence_depth", "hr_scan", "language_naturalness")
+AI_FIXED_PROMPTS = {
+    "asu-writer.md",
+    "auditor.md",
+    "fusion.md",
+    "jd-analysis.md",
+    "writer.md",
+}
+GAME_EXTENSION_PROMPTS = {
+    "asu-writer-game-production.md",
+    "auditor.md",
+    "fusion.md",
+    "jd-analysis-game-production.md",
+    "writer-game-production.md",
+}
 FIXED_SECTIONS = ("教育经历", "实习/工作经历", "实践经历", "自我能力")
 PHONE_RE = re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
@@ -41,6 +56,19 @@ class EvalCase(EvalModel):
     jd_path: Path
     jd_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     fact_snapshot_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class EvalSuite(EvalModel):
+    categories: list[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def categories_must_be_supported_and_unique(self) -> "EvalSuite":
+        if len(self.categories) != len(set(self.categories)):
+            raise ValueError("eval suite categories must be unique")
+        unsupported = set(self.categories).difference(SUPPORTED_EVAL_CATEGORIES)
+        if unsupported:
+            raise ValueError(f"unsupported eval categories: {sorted(unsupported)}")
+        return self
 
 
 class QualityScores(EvalModel):
@@ -134,11 +162,19 @@ def load_cases(fixtures_root: Path) -> list[EvalCase]:
                 fact_snapshot_sha256=fact_sha,
             )
         )
-    if len(cases) != 5:
-        raise ValueError(f"expected exactly 5 fixed eval cases, got {len(cases)}")
+    suite_path = fixtures_root / "suite.json"
+    if suite_path.is_file():
+        suite = EvalSuite.model_validate_json(suite_path.read_text(encoding="utf-8"))
+        expected_categories = set(suite.categories)
+    else:
+        expected_categories = FIXED_CATEGORIES
+    if len(cases) != len(expected_categories):
+        raise ValueError(
+            f"expected exactly {len(expected_categories)} eval cases, got {len(cases)}"
+        )
     categories = {item.category for item in cases}
-    if categories != FIXED_CATEGORIES:
-        raise ValueError(f"fixed eval categories mismatch: {sorted(categories)}")
+    if categories != expected_categories:
+        raise ValueError(f"eval categories mismatch: {sorted(categories)}")
     ids = [item.case_id for item in cases]
     if len(ids) != len(set(ids)):
         raise ValueError("fixed eval case IDs must be unique")
@@ -154,9 +190,16 @@ def deterministic_plan(
     repo_root = new_skill.resolve().parents[3]
     prompt_root = repo_root / ".agents" / "prompts" / "custom-resume"
     rubric_path = fixtures_root.resolve() / "quality-rubric.md"
+    categories = {item.category for item in cases}
+    prompt_names = set()
+    if categories & FIXED_CATEGORIES:
+        prompt_names.update(AI_FIXED_PROMPTS)
+    if "game_production_pm" in categories:
+        prompt_names.update(GAME_EXTENSION_PROMPTS)
     prompt_hashes = {
         path.name: sha256_bytes(path.read_bytes())
         for path in sorted(prompt_root.glob("*.md"))
+        if path.name in prompt_names
     }
     return {
         "schema_version": "1.0",

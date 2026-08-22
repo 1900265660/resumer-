@@ -4,14 +4,14 @@ This reference is the runtime summary of the confirmed V1 workflow. `docs/custom
 
 ## Scope
 
-- One Chinese AI product manager JD per run.
+- One Chinese AI product manager or game-production PM JD per run.
 - Content analysis, drafting, fusion, audit, and content approval only.
 - No HTML, PDF, visual QA, ATS page checks, application filling, or submission.
 
 ## Required sequence
 
 1. Normalize an application directory, pasted JD, or JD URL.
-2. Freeze JD, fact-library, preference, and reference-card digests.
+2. Confirm `ai_product_manager` or `game_production_pm`; freeze JD, fact-library, preference, and selected reference-card digests.
 3. Analyze the JD and build an ideal evidence blueprint.
 4. Map requirements to confirmed facts and evidence levels.
 5. Ask at most five high-value, option-style fact questions when needed.
@@ -33,4 +33,4 @@ This reference is the runtime summary of the confirmed V1 workflow. `docs/custom
 
 ## Current availability
 
-T02–T09 implement the standalone content-only workflow. Every semantic agent return must pass the code contracts and coordinator gates before persistence. T10–T12 still control main-harness routing, fixed evaluation, and legacy-default cutover.
+T02–T11 implement the standalone content-only workflow and fixed AI PM evaluation. T13 adds the authorized game-production role family and real content acceptance; T12 alone controls legacy-default cutover.

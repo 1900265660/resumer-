@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 from pathlib import Path
+
+import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -28,7 +31,15 @@ from eval_harness import (  # noqa: E402
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "evals"
+GAME_FIXTURES = Path(__file__).parent / "fixtures" / "game-production-extension"
 EVIDENCE = REPO_ROOT / "docs" / "custom-resume-agent" / "eval-results" / "fixed-v1"
+GAME_EVIDENCE = (
+    REPO_ROOT
+    / "docs"
+    / "custom-resume-agent"
+    / "eval-results"
+    / "game-production-v1.1"
+)
 
 
 def candidate(score: float, truth: bool = True) -> CandidateEval:
@@ -71,6 +82,35 @@ def test_eval_plan_is_byte_repeatable() -> None:
         "jd-analysis.md",
         "writer.md",
     }
+
+
+def test_game_extension_uses_one_sanitized_case_and_role_specific_prompts() -> None:
+    cases = load_cases(GAME_FIXTURES)
+    assert len(cases) == 1
+    assert cases[0].category == "game_production_pm"
+    assert cases[0].expected_hard_gap is True
+    plan = deterministic_plan(
+        GAME_FIXTURES,
+        REPO_ROOT / ".agents" / "prompts" / "campus-resume-optimizer.md",
+        REPO_ROOT / ".agents" / "skills" / "custom-resume" / "SKILL.md",
+    )
+    assert set(plan["new_prompt_sha256"]) == {
+        "asu-writer-game-production.md",
+        "auditor.md",
+        "fusion.md",
+        "jd-analysis-game-production.md",
+        "writer-game-production.md",
+    }
+
+
+def test_eval_suite_rejects_unknown_role_category(tmp_path: Path) -> None:
+    fixture = tmp_path / "fixtures"
+    shutil.copytree(GAME_FIXTURES, fixture)
+    (fixture / "suite.json").write_text(
+        '{"categories":["unsupported_role"]}\n', encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="unsupported eval categories"):
+        load_cases(fixture)
 
 
 def test_markdown_structure_requires_only_four_level_two_sections() -> None:
@@ -215,3 +255,45 @@ def test_tracked_fixed_eval_evidence_passes_and_matches_current_inputs() -> None
     summary = summarize_suite(evaluations, fixture_cases)
     assert summary.passed is True
     assert json.loads((EVIDENCE / "suite-summary.json").read_text(encoding="utf-8")) == summary.model_dump(mode="json")
+
+
+def test_tracked_game_extension_evidence_passes_and_matches_current_inputs() -> None:
+    fixture_cases = load_cases(GAME_FIXTURES)
+    tracked_plan = json.loads(
+        (GAME_EVIDENCE / "eval-plan.json").read_text(encoding="utf-8")
+    )
+    assert tracked_plan == deterministic_plan(
+        GAME_FIXTURES,
+        REPO_ROOT / ".agents" / "prompts" / "campus-resume-optimizer.md",
+        REPO_ROOT / ".agents" / "skills" / "custom-resume" / "SKILL.md",
+    )
+    fact_text = (GAME_FIXTURES / "fact-snapshot.md").read_text(encoding="utf-8")
+    case = fixture_cases[0]
+    case_root = GAME_EVIDENCE / "cases" / case.case_id
+    for lane in ("legacy", "new"):
+        trace = TraceArtifact.model_validate_json(
+            (case_root / f"{lane}-trace.json").read_text(encoding="utf-8")
+        )
+        assert validate_trace(trace, fact_text) == []
+        content = (case_root / f"{lane}.md").read_text(encoding="utf-8")
+        assert_sanitized(content, f"{case.case_id}/{lane}.md")
+        assert validate_markdown_structure(content) == []
+    blind_scores = load_blind_scores(GAME_EVIDENCE / "cases", fixture_cases)
+    mapping = json.loads(
+        (GAME_EVIDENCE / "blind-mapping.json").read_text(encoding="utf-8")
+    )
+    expected = [
+        item.model_dump(mode="json")
+        for item in unblind_evaluations(blind_scores, mapping)
+    ]
+    tracked = json.loads(
+        (GAME_EVIDENCE / "suite-results.json").read_text(encoding="utf-8")
+    )
+    assert tracked == expected
+    summary = summarize_suite(
+        [CaseEvaluation.model_validate(item) for item in tracked], fixture_cases
+    )
+    assert summary.passed is True
+    assert json.loads(
+        (GAME_EVIDENCE / "suite-summary.json").read_text(encoding="utf-8")
+    ) == summary.model_dump(mode="json")

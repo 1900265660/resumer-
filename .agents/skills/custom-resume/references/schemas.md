@@ -10,6 +10,7 @@ Every JSON artifact includes:
 - `run_id`
 - `created_at`
 - source input digests
+- normalized `role_family` on the input packet and JD analysis (`ai_product_manager|game_production_pm`)
 
 Unknown fields are rejected unless a later documented schema revision explicitly allows them.
 

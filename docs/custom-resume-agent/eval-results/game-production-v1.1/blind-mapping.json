@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "fact_snapshot_sha256": "4dedb5eeac04260505862a7f286da2983624dc8a68437db7dfc1426c9bea571d",
+  "cases": {
+    "game-production": {
+      "assignment": {
+        "candidate_a": "legacy",
+        "candidate_b": "new"
+      },
+      "deterministic_findings": {
+        "legacy": [],
+        "new": []
+      }
+    }
+  }
+}

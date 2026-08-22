@@ -32,6 +32,7 @@ from models import (  # noqa: E402
     QuestionStatus,
     ResumeSection,
     ResumeSectionName,
+    RoleFamily,
     SourceDigests,
     SourceType,
     assert_state_transition,
@@ -75,6 +76,20 @@ def test_models_reject_unknown_fields_and_naive_timestamps() -> None:
             source_locator="applications/测试_AI产品经理/jd.md",
             unexpected=True,
         )
+
+
+def test_role_family_defaults_to_ai_and_accepts_game_production() -> None:
+    default_packet = NormalizedInputPacket(
+        **artifact_base(),
+        application_dir="applications/测试_AI产品经理",
+        source_type=SourceType.TEXT,
+        source_locator="inline:text",
+    )
+    assert default_packet.role_family is RoleFamily.AI_PRODUCT_MANAGER
+    game_packet = default_packet.model_copy(
+        update={"role_family": RoleFamily.GAME_PRODUCTION_PM}
+    )
+    assert game_packet.role_family is RoleFamily.GAME_PRODUCTION_PM
 
     with pytest.raises(ValidationError, match="timezone"):
         NormalizedInputPacket(

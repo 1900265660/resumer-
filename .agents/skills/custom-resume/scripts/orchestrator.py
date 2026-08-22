@@ -30,6 +30,7 @@ from models import (
     NormalizedInputPacket,
     ReferenceResearchArtifact,
     ReferenceResearchMode,
+    RoleFamily,
     RunManifestArtifact,
     SourceDigests,
     SourceType,
@@ -58,6 +59,10 @@ class DeterministicGateError(OrchestrationError):
 
 
 WINDOWS_INVALID = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+REFERENCE_CARDS = {
+    RoleFamily.AI_PRODUCT_MANAGER: "ai-pm-method-cards.md",
+    RoleFamily.GAME_PRODUCTION_PM: "game-production-pm-method-cards.md",
+}
 
 
 def sha256_bytes(value: bytes) -> str:
@@ -120,6 +125,7 @@ def normalize_run_input(
     application_dir: Path | None = None,
     now: datetime | None = None,
     run_id: str | None = None,
+    role_family: RoleFamily = RoleFamily.AI_PRODUCT_MANAGER,
 ) -> NormalizedRunInput:
     repo_root = repo_root.resolve()
     timestamp = now or datetime.now(timezone.utc)
@@ -168,7 +174,7 @@ def normalize_run_input(
         / "skills"
         / "custom-resume"
         / "references"
-        / "ai-pm-method-cards.md"
+        / REFERENCE_CARDS[role_family]
     )
     for required in (fact_path, preferences_path, reference_path):
         if not required.is_file():
@@ -190,6 +196,7 @@ def normalize_run_input(
         application_dir=relative_application.as_posix(),
         source_type=source_type,
         source_locator=source_locator,
+        role_family=role_family,
     )
     return NormalizedRunInput(
         packet=packet,
@@ -355,6 +362,8 @@ class CoordinatorRun:
             raise OrchestrationError("analysis can only be recorded while analyzing")
         for artifact in (jd_analysis, evidence_map, fact_diff):
             _same_envelope(self.packet, artifact)
+        if jd_analysis.role_family is not self.packet.role_family:
+            raise AgentHandoffError("JD analysis role family does not match the approved packet")
         if evidence_map.selection_approved:
             raise HumanGateError("selection cannot be pre-approved by the coordinator")
         if fact_diff.source_fact_sha256 != self.packet.source_digests.fact_snapshot_sha256:

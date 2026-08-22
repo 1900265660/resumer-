@@ -36,6 +36,11 @@ class SourceType(StringEnum):
     URL = "url"
 
 
+class RoleFamily(StringEnum):
+    AI_PRODUCT_MANAGER = "ai_product_manager"
+    GAME_PRODUCTION_PM = "game_production_pm"
+
+
 class ContentState(StringEnum):
     NOT_STARTED = "not_started"
     ANALYZING = "analyzing"
@@ -173,6 +178,7 @@ class NormalizedInputPacket(ArtifactBase):
     application_dir: str = Field(pattern=r"^applications[\\/][^\r\n]+$")
     source_type: SourceType
     source_locator: str
+    role_family: RoleFamily = RoleFamily.AI_PRODUCT_MANAGER
     approved_requirement_ids: list[RequirementId] = Field(default_factory=list)
     approved_fact_ids: list[FactId] = Field(default_factory=list)
 
@@ -203,7 +209,7 @@ class IdealEvidenceItem(StrictModel):
 
 
 class JDAnalysisArtifact(ArtifactBase):
-    role_family: Literal["ai_product_manager"] = "ai_product_manager"
+    role_family: RoleFamily = RoleFamily.AI_PRODUCT_MANAGER
     job_goal: str = Field(min_length=1)
     business_problems: list[str] = Field(min_length=1)
     requirements: list[JobRequirement] = Field(min_length=1)

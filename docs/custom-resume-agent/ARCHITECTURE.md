@@ -1,7 +1,7 @@
 # 定制简历 Agent V1 架构
 
 > 状态：已确认
-> 版本：0.1
+> 版本：0.2
 > 日期：2026-08-22
 
 ## 1. 架构目标
@@ -113,8 +113,11 @@ JD directory / JD text / JD URL
 
 .agents/prompts/custom-resume/
 ├── jd-analysis.md
+├── jd-analysis-game-production.md
 ├── writer.md
+├── writer-game-production.md
 ├── asu-writer.md
+├── asu-writer-game-production.md
 ├── fusion.md
 └── auditor.md
 
@@ -148,6 +151,7 @@ $custom-resume <application_dir | jd_text | jd_url>
   "schema_version": "1.0",
   "run_id": "cr_YYYYMMDDTHHMMSS_<suffix>",
   "application_dir": "applications/<company>_<role>",
+  "role_family": "ai_product_manager|game_production_pm",
   "jd": {"source_type": "directory|text|url", "sha256": "..."},
   "fact_snapshot": {"source": "profile/01-candidate-profile.md", "sha256": "..."},
   "preferences_sha256": "...",
@@ -158,6 +162,8 @@ $custom-resume <application_dir | jd_text | jd_url>
 ```
 
 Writer 与 ASu Writer 必须收到内容等价、摘要一致的输入包。
+
+`role_family` 由协调器根据岗位语义提出并由用户确认。`ai_product_manager` 路由到 AI PM 分析 Prompt/方法卡，`game_production_pm` 路由到游戏研发 PM 分析 Prompt/方法卡；两者共享后续证据映射、双稿、融合、校验、审计和存储协议。旧输入缺少该字段时按 `ai_product_manager` 解析，以保持 V1 `1.x` 产物兼容。
 
 ## 7. 事实库协议
 

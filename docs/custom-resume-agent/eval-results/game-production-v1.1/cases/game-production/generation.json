@@ -1,0 +1,13 @@
+{
+  "case_id": "game-production",
+  "revision_round": 0,
+  "fact_snapshot_sha256": "4dedb5eeac04260505862a7f286da2983624dc8a68437db7dfc1426c9bea571d",
+  "jd_sha256": "40005267dd8fe545ac5b2d85e75e613f5ce0bec6719f75e26aa7785eac6f0e4c",
+  "role_family": "game_production_pm",
+  "lanes": {
+    "legacy": {"prompt_paths": [".agents/prompts/campus-resume-optimizer.md"]},
+    "new": {"prompt_paths": [".agents/prompts/custom-resume/jd-analysis-game-production.md", ".agents/prompts/custom-resume/writer-game-production.md", ".agents/prompts/custom-resume/asu-writer-game-production.md", ".agents/prompts/custom-resume/fusion.md", ".agents/prompts/custom-resume/auditor.md"]}
+  },
+  "html_generated": false,
+  "pdf_generated": false
+}

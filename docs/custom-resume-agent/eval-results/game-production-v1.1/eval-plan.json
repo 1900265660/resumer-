@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "fact_snapshot_sha256": "4dedb5eeac04260505862a7f286da2983624dc8a68437db7dfc1426c9bea571d",
+  "legacy_prompt_sha256": "945af6d70a68211f606bcb3d1c6b7ca8e85fffbe6d837cbeabb85024b4d3ee88",
+  "new_skill_sha256": "c6c3e2e0b17877844e3415c69db7953d23a2ec7aaf6c5142249c699a317d2f35",
+  "new_prompt_sha256": {
+    "asu-writer-game-production.md": "b8b0bc27793af7a04456db5f500a1408de3889cf070e3c7ceb1b1e6fecfa298e",
+    "auditor.md": "d044437bb3290792414af0dfe8bd811171c15225eae79a24d25417767710289d",
+    "fusion.md": "53609f5de72a6eb3649b680454bb56106eb77729fffff303a3c74bbe087f6149",
+    "jd-analysis-game-production.md": "1be8e658ed1a33aeae9beb6969eead14fbe67fb5caaac59f7ab12579631aba4d",
+    "writer-game-production.md": "ed43f8a074522231fa2150090932a8bba441c2b971a72d3ad0bc1ab299a7246a"
+  },
+  "quality_rubric_sha256": "801f4b4a1c1f9e5c8a20e1e099abc51835462c64a7fc983a39ab7c278e7bc290",
+  "cases": [
+    {
+      "case_id": "game-production",
+      "category": "game_production_pm",
+      "jd_sha256": "40005267dd8fe545ac5b2d85e75e613f5ce0bec6719f75e26aa7785eac6f0e4c",
+      "legacy_artifact": "game-production/legacy.md",
+      "new_artifact": "game-production/new.md"
+    }
+  ]
+}

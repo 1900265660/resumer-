@@ -35,6 +35,7 @@ from models import (  # noqa: E402
     ReferenceResearchArtifact,
     ReferenceResearchMode,
     ReferenceSource,
+    RoleFamily,
     RequirementPriority,
     RevisionRecord,
     ResumeBullet,
@@ -107,6 +108,9 @@ def prepare_repo(tmp_path: Path) -> Path:
     )
     reference.parent.mkdir(parents=True)
     reference.write_text("AI PM 方法卡，不是候选人事实。", encoding="utf-8")
+    (reference.parent / "game-production-pm-method-cards.md").write_text(
+        "游戏研发 PM 方法卡，不是候选人事实。", encoding="utf-8"
+    )
     return tmp_path
 
 
@@ -122,6 +126,23 @@ def normalized(tmp_path: Path):
         now=NOW,
         run_id=RUN_ID,
     )
+
+
+def test_game_role_selects_game_method_card_and_freezes_role(tmp_path: Path) -> None:
+    prepare_repo(tmp_path)
+    game = normalize_run_input(
+        tmp_path,
+        source_type=SourceType.TEXT,
+        source_locator="inline:text",
+        company="测试游戏公司",
+        role="游戏研发PM",
+        jd_text="负责游戏版本排期、风险跟踪与跨职能协同。",
+        now=NOW,
+        run_id=RUN_ID,
+        role_family=RoleFamily.GAME_PRODUCTION_PM,
+    )
+    assert game.packet.role_family is RoleFamily.GAME_PRODUCTION_PM
+    assert game.reference_cards_text == "游戏研发 PM 方法卡，不是候选人事实。"
 
 
 def analysis_artifacts(packet):
