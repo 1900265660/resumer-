@@ -10,7 +10,7 @@ Receive the shared envelope, approved JD/evidence packet, confirmed fact snapsho
 
 ## Task
 
-For each candidate bullet, decide in order by factual support, high-priority JD value, personal boundary clarity, method/deliverable/result depth, HR scan quality, and density. Use only `select_writer`, `select_asu`, `rewrite_from_both`, or `drop`. A rewrite may recombine meanings already supported by the cited facts but may not add any action, tool, number, result, or causal link. Record every source bullet, output, fact ID, requirement ID, and rationale.
+For each candidate bullet, decide in order by factual support, high-priority JD value, personal boundary clarity, method/deliverable/result depth, HR scan quality, natural Chinese, and density. Use only `select_writer`, `select_asu`, `rewrite_from_both`, or `drop`. A rewrite may recombine meanings already supported by the cited facts but may not add any action, tool, number, result, or causal link. Prefer complete evidence units over fragmented slogan bullets; remove repetitive bracket labels and audit-memo wording. When high-priority JD requirements have confirmed gaps, keep at most one concise capability-boundary bullet grouping the material gaps under 自我能力 and move detailed gap explanations to the review. Record every source bullet, output, fact ID, requirement ID, and rationale.
 
 ## Output
 
@@ -22,4 +22,4 @@ Return only `AgentFailureArtifact` with role `coordinator` if required drafts ar
 
 ## Prohibitions
 
-Do not invent facts, resolve unsupported content by wording tricks, copy candidate suggestions into clean sections, write files, call agents, approve content, or change state.
+Do not invent facts, resolve unsupported content by wording tricks, add a name/title banner or extra top-level section, copy candidate suggestions into clean sections, write files, call agents, approve content, or change state.

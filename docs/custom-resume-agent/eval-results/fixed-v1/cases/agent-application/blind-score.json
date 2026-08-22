@@ -1,0 +1,35 @@
+{
+  "case_id": "agent-application",
+  "fact_snapshot_sha256": "8006d03e583ddf9166ee8368f3cacdeeab110bce5728645cfb9c60013b59fd54",
+  "candidate_a": {
+    "truth_passed": false,
+    "hard_findings": [
+      "实习经历首条 bullet 仅引用 FACT-WORK-001-01，却在事实中的访谈、任务归纳和需求优先级之外补写“为功能规划提供依据”，新增了未被该事实支持的用途。",
+      "招聘知识库项目第二条 bullet 仅引用 FACT-PROJECT-001-02，却把调研和知识条目改写为“将用户需求与知识内容转化为可检索的问答基础”，补写了事实未陈述的转化结果和用途。",
+      "招聘知识库项目第三条 bullet 仅引用 FACT-PROJECT-001-02，却补写“围绕问答效果”以及“兼顾有效回答和无关问题处理”，把方法扩写成事实未陈述的目的与效果。"
+    ],
+    "scores": {
+      "jd_coverage": 7,
+      "evidence_depth": 7,
+      "hr_scan": 7,
+      "language_naturalness": 8
+    }
+  },
+  "candidate_b": {
+    "truth_passed": true,
+    "hard_findings": [],
+    "scores": {
+      "jd_coverage": 8,
+      "evidence_depth": 8,
+      "hr_scan": 8,
+      "language_naturalness": 8
+    }
+  },
+  "evaluator_notes": [
+    "标题核验：A、B 的学校、公司、角色、项目名称和日期均与对应 experience_id 的事实标题一致；标题不因未在 trace 中重复引用而扣真实性。",
+    "A 的 JD 覆盖：企业知识问答调研、场景拆解、RAG、Prompt、拒答、评测指标、反馈复盘、迭代和跨团队协作均有呈现，但多轮对话设计与 MVP 全流程的高优先级缺口没有披露，因此低于 8 分。",
+    "A 的证据和扫描：核心经历包含动作、方法、交付物与量化结果，但三处新增用途或效果导致真实性失败且削弱证据严谨性；正文能快速看到三项优势，却看不到主要能力风险。",
+    "B 的 JD 覆盖：用事实覆盖企业知识问答、RAG/Prompt、拒答、准确率与拒识率、反馈闭环、迭代及协作，并明确披露多轮对话设计与 MVP 全流程仍待补强；该缺口已诚实处理，不再因缺少经历重复扣分。",
+    "B 的证据、扫描与语言：所有 bullet 均由同经历 trace 事实完整支持；核心动作、方法、交付物和结果清楚，三项相关优势与主要风险可快速识别，表达具体克制且能力边界简洁。"
+  ]
+}

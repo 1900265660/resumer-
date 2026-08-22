@@ -254,8 +254,11 @@ def approve_run(
     application_dir = application_dir.resolve()
     recover_approval(application_dir)
     manifest = load_run(application_dir, run_id)
-    if manifest.state is not ContentState.APPROVED:
-        raise StorageError("only an approved run can become current")
+    if manifest.state not in {
+        ContentState.NEEDS_CONTENT_REVIEW,
+        ContentState.APPROVED,
+    }:
+        raise StorageError("only a review-ready run can become current")
     audit_path = application_dir / "resume-content" / "runs" / run_id / "audit.json"
     try:
         audit = AuditArtifact.model_validate(_read_json(audit_path))

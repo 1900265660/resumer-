@@ -1,0 +1,32 @@
+{
+  "case_id": "data-strategy",
+  "fact_snapshot_sha256": "8006d03e583ddf9166ee8368f3cacdeeab110bce5728645cfb9c60013b59fd54",
+  "candidate_a": {
+    "truth_passed": false,
+    "hard_findings": [
+      "“调研 8 位求职者并整理 600 条知识条目，为检索与回答提供内容基础”中的用途判断未由所列 FACT-PROJECT-001-02 明示，属于在原始动作之外补写用途。"
+    ],
+    "scores": {
+      "jd_coverage": 7.4,
+      "evidence_depth": 7.0,
+      "hr_scan": 7.1,
+      "language_naturalness": 7.0
+    }
+  },
+  "candidate_b": {
+    "truth_passed": true,
+    "hard_findings": [],
+    "scores": {
+      "jd_coverage": 8.2,
+      "evidence_depth": 8.5,
+      "hr_scan": 8.2,
+      "language_naturalness": 8.3
+    }
+  },
+  "evaluator_notes": [
+    "逐条核对 Markdown bullet、trace 与同经历 fact_ids；candidate_a 除已列 hard finding 外，其余动作、数字、交付物和经历标题均可由事实快照支持，candidate_b 未发现新增所有权、因果或结果。",
+    "candidate_a 对数据质量四类指标、SQL/Excel 口径验证、看板与数据字典、跨团队评审及字段冲突关闭均有直接证据，但没有披露 JD 核心的“数据链路梳理”缺口，因此 jd_coverage 必须低于 8；未把缺失横幅计入 hr_scan。",
+    "candidate_b 的“数据链路梳理实践仍待补强”准确区分了已有字段口径/质量治理证据与尚无直接证据的数据链路实践，表述简洁克制；该已披露缺口没有再次作为“缺少经历”扣 jd_coverage。",
+    "candidate_a 将若干单一事实拆成多条并加入解释性用途，降低证据严谨度和语言紧凑度；candidate_b 的核心数据项目以动作、工具、交付物和关闭 18 个冲突形成更清楚的扫描路径，但仍没有直接证明异常监控规则或治理后的业务指标改善，故未给高分。"
+  ]
+}

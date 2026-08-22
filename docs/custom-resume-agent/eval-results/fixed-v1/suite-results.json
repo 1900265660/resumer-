@@ -1,0 +1,179 @@
+[
+  {
+    "case_id": "agent-application",
+    "fact_snapshot_sha256": "8006d03e583ddf9166ee8368f3cacdeeab110bce5728645cfb9c60013b59fd54",
+    "evaluation_mode": "blind",
+    "legacy": {
+      "truth_passed": false,
+      "hard_findings": [
+        "实习经历首条 bullet 仅引用 FACT-WORK-001-01，却在事实中的访谈、任务归纳和需求优先级之外补写“为功能规划提供依据”，新增了未被该事实支持的用途。",
+        "招聘知识库项目第二条 bullet 仅引用 FACT-PROJECT-001-02，却把调研和知识条目改写为“将用户需求与知识内容转化为可检索的问答基础”，补写了事实未陈述的转化结果和用途。",
+        "招聘知识库项目第三条 bullet 仅引用 FACT-PROJECT-001-02，却补写“围绕问答效果”以及“兼顾有效回答和无关问题处理”，把方法扩写成事实未陈述的目的与效果。",
+        "EXTRA_TOP_LEVEL_STRUCTURE ['候选人甲｜AI Agent 产品经理']"
+      ],
+      "scores": {
+        "jd_coverage": 7.0,
+        "evidence_depth": 7.0,
+        "hr_scan": 7.0,
+        "language_naturalness": 8.0
+      }
+    },
+    "new": {
+      "truth_passed": true,
+      "hard_findings": [],
+      "scores": {
+        "jd_coverage": 8.0,
+        "evidence_depth": 8.0,
+        "hr_scan": 8.0,
+        "language_naturalness": 8.0
+      }
+    },
+    "evaluator_notes": [
+      "标题核验：A、B 的学校、公司、角色、项目名称和日期均与对应 experience_id 的事实标题一致；标题不因未在 trace 中重复引用而扣真实性。",
+      "A 的 JD 覆盖：企业知识问答调研、场景拆解、RAG、Prompt、拒答、评测指标、反馈复盘、迭代和跨团队协作均有呈现，但多轮对话设计与 MVP 全流程的高优先级缺口没有披露，因此低于 8 分。",
+      "A 的证据和扫描：核心经历包含动作、方法、交付物与量化结果，但三处新增用途或效果导致真实性失败且削弱证据严谨性；正文能快速看到三项优势，却看不到主要能力风险。",
+      "B 的 JD 覆盖：用事实覆盖企业知识问答、RAG/Prompt、拒答、准确率与拒识率、反馈闭环、迭代及协作，并明确披露多轮对话设计与 MVP 全流程仍待补强；该缺口已诚实处理，不再因缺少经历重复扣分。",
+      "B 的证据、扫描与语言：所有 bullet 均由同经历 trace 事实完整支持；核心动作、方法、交付物和结果清楚，三项相关优势与主要风险可快速识别，表达具体克制且能力边界简洁。"
+    ]
+  },
+  {
+    "case_id": "ai-platform-tool",
+    "fact_snapshot_sha256": "8006d03e583ddf9166ee8368f3cacdeeab110bce5728645cfb9c60013b59fd54",
+    "evaluation_mode": "blind",
+    "legacy": {
+      "truth_passed": false,
+      "hard_findings": [
+        "招聘知识库项目第二条 bullet 仅引用 FACT-PROJECT-001-02，却把调研和整理知识条目改写为“形成招聘问答所需的知识内容”，补写了原事实没有陈述的用途。",
+        "招聘知识库项目第三条 bullet 仅引用 FACT-PROJECT-001-02，却以“覆盖检索、回答及无关问题处理”扩写混合检索、结构化 Prompt 与拒答策略的用途范围，超出该事实直接支持的内容。",
+        "EXTRA_TOP_LEVEL_STRUCTURE ['候选人甲｜AI 平台产品经理']"
+      ],
+      "scores": {
+        "jd_coverage": 7.0,
+        "evidence_depth": 7.0,
+        "hr_scan": 7.0,
+        "language_naturalness": 8.0
+      }
+    },
+    "new": {
+      "truth_passed": true,
+      "hard_findings": [],
+      "scores": {
+        "jd_coverage": 8.0,
+        "evidence_depth": 8.0,
+        "hr_scan": 8.0,
+        "language_naturalness": 8.0
+      }
+    },
+    "evaluator_notes": [
+      "标题核验：A、B 的学校、公司、角色、项目名称和日期均与对应 experience_id 的事实标题一致；标题不要求在 bullet trace 中重复引用。",
+      "A 的 JD 覆盖：检索、回答、反馈、权限模块拆解，跨团队迭代，问题复盘，数据指标与流转，RAG 和评测均有事实证据；平台能力抽象、接口定义与验收标准的核心缺口没有披露，因此低于 8 分。",
+      "A 的证据和扫描：项目动作、方法、交付物与量化结果总体充分，但两条知识库 bullet 补写用途，真实性失败并降低证据严谨性；优势容易识别，主要平台产品能力风险没有出现在正文。",
+      "B 的 JD 覆盖：用事实覆盖模块拆解、算法研发协作、两期迭代、问题监控、权限、RAG、评测和数据治理，并明确披露平台能力抽象、接口定义与验收标准经验仍待补强；已披露缺口不重复扣分。",
+      "B 的证据、扫描与语言：所有 bullet 均由同经历 trace 事实完整支持；核心经历兼具动作、方法、交付物和量化结果，三项岗位相关优势及主要风险可快速识别，语言直接自然且没有审计报告腔。"
+    ]
+  },
+  {
+    "case_id": "consumer-commerce",
+    "fact_snapshot_sha256": "8006d03e583ddf9166ee8368f3cacdeeab110bce5728645cfb9c60013b59fd54",
+    "evaluation_mode": "blind",
+    "legacy": {
+      "truth_passed": false,
+      "hard_findings": [
+        "“推动高频问题解决率由 68% 提升至 84%，以问题复盘结果验证迭代效果”把已知提升结果进一步解释为对迭代效果的验证；FACT-WORK-001-03 未明示这一验证用途或因果。",
+        "“组织 40 位用户开展可用性测试”补写了候选人的组织所有权；FACT-PROJECT-002-02 只确认通过 40 位用户的可用性测试收集反馈。"
+      ],
+      "scores": {
+        "jd_coverage": 7.5,
+        "evidence_depth": 6.8,
+        "hr_scan": 6.9,
+        "language_naturalness": 6.8
+      }
+    },
+    "new": {
+      "truth_passed": true,
+      "hard_findings": [],
+      "scores": {
+        "jd_coverage": 8.6,
+        "evidence_depth": 8.5,
+        "hr_scan": 8.4,
+        "language_naturalness": 8.3
+      }
+    },
+    "evaluator_notes": [
+      "逐条核对 Markdown bullet、trace 与同经历 fact_ids；candidate_a 的经历标题、动作、数字、交付物和结果均有完整支持，能力边界是对事实快照中无直接证据部分的克制披露，不构成能力拔高。",
+      "candidate_a 直接覆盖行为日志分析、偏好分群、冷启动标签、推荐理由、负反馈、收藏引导、原型、可用性测试和任务完成率，并用一条边界准确处理年轻用户 AI 推荐以及互动/留存指标的证据缺口；已披露缺口没有重复扣 jd_coverage。",
+      "candidate_b 的正向经历高度相关，但没有明确处理“年轻用户”“AI 推荐”以及互动、留存指标无直接证据的主要风险，所以 jd_coverage 低于 8，hr_scan 也不能达到 8 分基准。",
+      "candidate_b 将消费推荐项目机械拆成六条，并出现新增验证用途和测试组织所有权；这些真实性问题不能由其丰富的数字证据抵消，因此 evidence_depth 与 language_naturalness 均从严评分。"
+    ]
+  },
+  {
+    "case_id": "data-strategy",
+    "fact_snapshot_sha256": "8006d03e583ddf9166ee8368f3cacdeeab110bce5728645cfb9c60013b59fd54",
+    "evaluation_mode": "blind",
+    "legacy": {
+      "truth_passed": false,
+      "hard_findings": [
+        "“调研 8 位求职者并整理 600 条知识条目，为检索与回答提供内容基础”中的用途判断未由所列 FACT-PROJECT-001-02 明示，属于在原始动作之外补写用途。"
+      ],
+      "scores": {
+        "jd_coverage": 7.4,
+        "evidence_depth": 7.0,
+        "hr_scan": 7.1,
+        "language_naturalness": 7.0
+      }
+    },
+    "new": {
+      "truth_passed": true,
+      "hard_findings": [],
+      "scores": {
+        "jd_coverage": 8.2,
+        "evidence_depth": 8.5,
+        "hr_scan": 8.2,
+        "language_naturalness": 8.3
+      }
+    },
+    "evaluator_notes": [
+      "逐条核对 Markdown bullet、trace 与同经历 fact_ids；candidate_a 除已列 hard finding 外，其余动作、数字、交付物和经历标题均可由事实快照支持，candidate_b 未发现新增所有权、因果或结果。",
+      "candidate_a 对数据质量四类指标、SQL/Excel 口径验证、看板与数据字典、跨团队评审及字段冲突关闭均有直接证据，但没有披露 JD 核心的“数据链路梳理”缺口，因此 jd_coverage 必须低于 8；未把缺失横幅计入 hr_scan。",
+      "candidate_b 的“数据链路梳理实践仍待补强”准确区分了已有字段口径/质量治理证据与尚无直接证据的数据链路实践，表述简洁克制；该已披露缺口没有再次作为“缺少经历”扣 jd_coverage。",
+      "candidate_a 将若干单一事实拆成多条并加入解释性用途，降低证据严谨度和语言紧凑度；candidate_b 的核心数据项目以动作、工具、交付物和关闭 18 个冲突形成更清楚的扫描路径，但仍没有直接证明异常监控规则或治理后的业务指标改善，故未给高分。"
+    ]
+  },
+  {
+    "case_id": "technical-gap",
+    "fact_snapshot_sha256": "8006d03e583ddf9166ee8368f3cacdeeab110bce5728645cfb9c60013b59fd54",
+    "evaluation_mode": "blind",
+    "legacy": {
+      "truth_passed": false,
+      "hard_findings": [
+        "“为产品范围判断提供依据”补写了事实库未记录的用途，FACT-WORK-001-01 仅支持访谈、任务归纳和需求优先级输出。",
+        "“使用 Figma、Axure 完成产品设计，并使用 SQL、Excel、Python 处理与验证数据”将工具清单扩写为具体使用行为和用途，FACT-SKILL-001-02 未提供这些事实，尤其未支持 Python 用于数据处理与验证。",
+        "“具备 RAG、Prompt 工程、评测集设计和低代码 Agent 工作流实践”将技能清单整体表述为已有实践，FACT-SKILL-001-01 未支持这一实践强度，尤其缺少低代码 Agent 工作流的实践证据。",
+        "FIXED_SECTION_LEVEL_MISMATCH",
+        "EXTRA_TOP_LEVEL_STRUCTURE ['示例大学｜信息管理｜本科｜2022/09–2026/06', '示例科技｜AI 产品实习生｜2025/06–2025/09', 'AI 数据质量看板｜产品策划｜2026/01–2026/03', '招聘知识库问答 Agent｜产品负责人｜2025/03–2025/06', '消费内容推荐实验｜产品策划｜2025/10–2025/12']"
+      ],
+      "scores": {
+        "jd_coverage": 5.0,
+        "evidence_depth": 7.0,
+        "hr_scan": 6.0,
+        "language_naturalness": 6.0
+      }
+    },
+    "new": {
+      "truth_passed": true,
+      "hard_findings": [],
+      "scores": {
+        "jd_coverage": 8.0,
+        "evidence_depth": 8.0,
+        "hr_scan": 8.0,
+        "language_naturalness": 8.0
+      }
+    },
+    "evaluator_notes": [
+      "真实性按每个 Markdown bullet 与对应 trace 中同经历 fact_ids 逐条核验；经历标题与 fact snapshot 的 experience_id 标题一致。",
+      "候选 A 用一句明确、克制的能力边界覆盖了大模型基础设施和云原生平台实操缺口，未冒充 GPU 集群调度、分布式训练、推理性能、模型部署、MLOps、Kubernetes、CUDA 或分布式系统实操；因此不因缺少这些经历重复扣 JD 覆盖分。",
+      "候选 B 展示了 AI 应用产品、数据指标和评测相关邻近能力，但未披露基础设施、云原生、三年以上经验及相关技术栈的核心缺口，故 JD 覆盖低于 8。",
+      "候选 A 的三项相关优势与主要风险均能快速识别；候选 B 的逐条方括号标签较机械，且主要风险未在正文显式呈现。"
+    ]
+  }
+]

@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "rounds": [
+    {
+      "round": 1,
+      "accepted_as_release_evidence": false,
+      "reason": "Prompt quality issues and ambiguous heading-trace instructions caused truth and quality failures."
+    },
+    {
+      "round": 2,
+      "accepted_as_release_evidence": false,
+      "reason": "Blind trace accidentally retained the legacy/new lane field; strict blinding was invalid."
+    },
+    {
+      "round": 3,
+      "accepted_as_release_evidence": false,
+      "reason": "Strict blinding passed, but data-strategy and consumer-commerce omitted material high-priority gap boundaries and scored 7 for JD coverage."
+    },
+    {
+      "round": 4,
+      "accepted_as_release_evidence": true,
+      "reason": "Protocol correction re-evaluated the two changed cases; unchanged round-3 case inputs were byte-identical and retained their independent blind scores."
+    }
+  ]
+}

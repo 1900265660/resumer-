@@ -1,0 +1,34 @@
+{
+  "case_id": "technical-gap",
+  "fact_snapshot_sha256": "8006d03e583ddf9166ee8368f3cacdeeab110bce5728645cfb9c60013b59fd54",
+  "candidate_a": {
+    "truth_passed": true,
+    "hard_findings": [],
+    "scores": {
+      "jd_coverage": 8,
+      "evidence_depth": 8,
+      "hr_scan": 8,
+      "language_naturalness": 8
+    }
+  },
+  "candidate_b": {
+    "truth_passed": false,
+    "hard_findings": [
+      "“为产品范围判断提供依据”补写了事实库未记录的用途，FACT-WORK-001-01 仅支持访谈、任务归纳和需求优先级输出。",
+      "“使用 Figma、Axure 完成产品设计，并使用 SQL、Excel、Python 处理与验证数据”将工具清单扩写为具体使用行为和用途，FACT-SKILL-001-02 未提供这些事实，尤其未支持 Python 用于数据处理与验证。",
+      "“具备 RAG、Prompt 工程、评测集设计和低代码 Agent 工作流实践”将技能清单整体表述为已有实践，FACT-SKILL-001-01 未支持这一实践强度，尤其缺少低代码 Agent 工作流的实践证据。"
+    ],
+    "scores": {
+      "jd_coverage": 5,
+      "evidence_depth": 7,
+      "hr_scan": 6,
+      "language_naturalness": 6
+    }
+  },
+  "evaluator_notes": [
+    "真实性按每个 Markdown bullet 与对应 trace 中同经历 fact_ids 逐条核验；经历标题与 fact snapshot 的 experience_id 标题一致。",
+    "候选 A 用一句明确、克制的能力边界覆盖了大模型基础设施和云原生平台实操缺口，未冒充 GPU 集群调度、分布式训练、推理性能、模型部署、MLOps、Kubernetes、CUDA 或分布式系统实操；因此不因缺少这些经历重复扣 JD 覆盖分。",
+    "候选 B 展示了 AI 应用产品、数据指标和评测相关邻近能力，但未披露基础设施、云原生、三年以上经验及相关技术栈的核心缺口，故 JD 覆盖低于 8。",
+    "候选 A 的三项相关优势与主要风险均能快速识别；候选 B 的逐条方括号标签较机械，且主要风险未在正文显式呈现。"
+  ]
+}

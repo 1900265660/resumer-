@@ -124,12 +124,13 @@
 ## T11 固定评测集与自动回归
 
 - 优先级：P1
-- 状态：pending
+- 状态：completed
 - 目标：建立 5 类脱敏 JD 的公平旧/新基线和盲评产物。
 - 依赖：T08、T09、T10。
 - 范围：夹具、旧流程重跑、新流程运行、匿名化、硬校验和评分表。
 - 验收：五类样本齐全；同事实快照；可重复运行；不包含个人敏感字段。
 - 测试：完整 pytest、fixture run validator、盲评包一致性。
+- 证据：`docs/custom-resume-agent/eval-results/fixed-v1/`；五案真实性与质量门槛均通过，严格匿名 trace 不含 lane 身份。
 
 ## T12 切换与旧入口停用标记
 

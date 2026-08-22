@@ -9,7 +9,7 @@ Produce reviewable Chinese resume content for one AI product manager JD while ke
 
 ## Implementation status
 
-T02–T10 provide the complete standalone content workflow and an explicit main-harness route while preserving the legacy default. Fixed evaluation evidence is still pending; do not claim V1 has replaced the legacy default until T11 passes and T12 receives user approval.
+T02–T11 provide the standalone content workflow, explicit main-harness route, and passing five-case fixed evaluation while preserving the legacy default. Do not claim V1 has replaced the legacy default until T12 receives user approval.
 
 ## Execution
 
@@ -20,7 +20,7 @@ T02–T10 provide the complete standalone content workflow and an explicit main-
 5. Build one writer packet. Invoke `custom_resume_writer` and `custom_resume_asu_writer` in isolated read-only contexts with semantically identical copies of that packet; run them in parallel when the host supports it. Never show either result to the other.
 6. Validate both returns with `DraftArtifact`, fuse using `.agents/prompts/custom-resume/fusion.md`, and run `scripts/validators.py`. Do not invoke Auditor while a deterministic hard finding remains.
 7. Invoke `custom_resume_auditor` with only the fused result, exact referenced facts, evidence map, JD analysis, and deterministic report. Apply at most two directed revisions.
-8. Present `content-master.md`, `one-page-density.md`, `content-review.md`, fusion decisions, and optional source drafts. Only after explicit content approval may the coordinator commit the immutable run and update `resume-content/current.json`.
+8. Commit the review-ready run immutably with state `needs_content_review`, then present `content-master.md`, `one-page-density.md`, `content-review.md`, fusion decisions, and optional source drafts. Only after explicit content approval may the coordinator update `resume-content/current.json` and the independent `resume_content` summary; the historical run remains immutable.
 
 If the project agents are unavailable, pause for retry or explicit `single_agent_degraded`; never imply blind-dual evaluation succeeded in degraded mode. The coordinator is the only writer of project files.
 

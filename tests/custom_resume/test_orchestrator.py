@@ -466,6 +466,10 @@ def test_full_content_only_flow_commits_reviewable_run_and_pointer(tmp_path: Pat
     fact_values = {fact_id: item.value for fact_id, item in facts.items()}
     assert "referenced_fact_values" in run.auditor_packet(fact_values)
     assert run.record_audit(passing_audit(run)) is True
+    review_run = run.commit_for_review()
+    assert review_run.is_dir()
+    assert not (run.normalized.application_dir / "resume-content" / "current.json").exists()
+    assert load_run(run.normalized.application_dir, RUN_ID).state is ContentState.NEEDS_CONTENT_REVIEW
     with pytest.raises(HumanGateError, match="explicit content approval"):
         run.finalize_content(
             approval_granted=False,
@@ -481,7 +485,7 @@ def test_full_content_only_flow_commits_reviewable_run_and_pointer(tmp_path: Pat
     assert validate_run_artifact_completeness(final) == []
     assert not list(final.glob("*.pdf"))
     assert not list(final.glob("*.html"))
-    assert load_run(run.normalized.application_dir, RUN_ID).state is ContentState.APPROVED
+    assert load_run(run.normalized.application_dir, RUN_ID).state is ContentState.NEEDS_CONTENT_REVIEW
     assert validate_pointer_consistency(run.normalized.application_dir).approved_run_id == RUN_ID
     manifest = json.loads(
         (run.normalized.application_dir / "manifest.json").read_text(encoding="utf-8")

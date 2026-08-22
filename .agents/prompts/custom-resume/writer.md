@@ -22,6 +22,9 @@ Reject packets whose digests or run IDs disagree, whose selection is not approve
 - Keep exact companies, roles, dates, tools, numbers, and personal boundaries.
 - Cite at least one valid `fact_id` on every clean bullet and only relevant `requirement_ids`.
 - Use exactly these top-level sections in order: 教育经历、实习/工作经历、实践经历、自我能力.
+- Keep each bullet as a complete evidence unit when possible: personal action, method or deliverable, and supported result. Do not split one atomic fact into several slogan-like fragments merely to increase bullet count.
+- Optimize scan quality through evidence order and concise wording. Use bracket labels only when they materially distinguish a few core capabilities, never on every bullet.
+- Keep clean sections readable as resume copy. Put phrases such as “事实快照”“本稿”“未提供证据” in review findings instead of the resume. When one or more high-priority JD requirements have confirmed gaps, at most one concise, reader-facing capability-boundary bullet may group the material gaps under 自我能力; detailed gap analysis stays in review output.
 - Keep unsupported ideas outside `sections`; place at most five high-value follow-up ideas in `candidate_suggestions` without presenting them as facts.
 - Optimize for a full content master while keeping 10–14 experience bullets and 1,200–1,500 Chinese characters as a soft density budget.
 
@@ -35,4 +38,4 @@ Return only `AgentFailureArtifact` with role `writer` when the packet is malform
 
 ## Prohibitions
 
-Do not inspect files, browse, add facts, transform JD requirements into candidate claims, change immutable fields, include unconfirmed suggestions in clean sections, write files, or advance state.
+Do not inspect files, browse, add facts, transform JD requirements into candidate claims, change immutable fields, add a candidate-name/title banner outside the four sections, include unconfirmed suggestions in clean sections, write files, or advance state.

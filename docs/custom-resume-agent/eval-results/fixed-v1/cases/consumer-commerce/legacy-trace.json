@@ -1,0 +1,86 @@
+{
+  "case_id": "consumer-commerce",
+  "lane": "legacy",
+  "bullets": [
+    {
+      "bullet_text": "信息管理本科，2022/09–2026/06。",
+      "experience_id": "EXP-EDU-001",
+      "fact_ids": ["FACT-EDU-001-01"]
+    },
+    {
+      "bullet_text": "访谈 12 位一线员工，归纳企业知识问答场景中的 4 类高频任务并输出需求优先级。",
+      "experience_id": "EXP-WORK-001",
+      "fact_ids": ["FACT-WORK-001-01"]
+    },
+    {
+      "bullet_text": "将需求拆解为检索、回答、反馈和权限 4 个模块，协同算法与研发完成两期迭代。",
+      "experience_id": "EXP-WORK-001",
+      "fact_ids": ["FACT-WORK-001-02"]
+    },
+    {
+      "bullet_text": "建立每周问题复盘表，跟踪未命中、答案过期和权限错误。",
+      "experience_id": "EXP-WORK-001",
+      "fact_ids": ["FACT-WORK-001-03"]
+    },
+    {
+      "bullet_text": "推动高频问题解决率由 68% 提升至 84%，以问题复盘结果验证迭代效果。",
+      "experience_id": "EXP-WORK-001",
+      "fact_ids": ["FACT-WORK-001-03"]
+    },
+    {
+      "bullet_text": "分析 2 万条脱敏行为日志，识别用户内容偏好差异。",
+      "experience_id": "EXP-PROJECT-002",
+      "fact_ids": ["FACT-PROJECT-002-01"]
+    },
+    {
+      "bullet_text": "将用户划分为 5 类内容偏好群体，并提出冷启动标签方案。",
+      "experience_id": "EXP-PROJECT-002",
+      "fact_ids": ["FACT-PROJECT-002-01"]
+    },
+    {
+      "bullet_text": "设计推荐理由、负反馈和收藏引导原型，覆盖内容发现后的关键交互。",
+      "experience_id": "EXP-PROJECT-002",
+      "fact_ids": ["FACT-PROJECT-002-02"]
+    },
+    {
+      "bullet_text": "组织 40 位用户开展可用性测试，收集 126 条反馈。",
+      "experience_id": "EXP-PROJECT-002",
+      "fact_ids": ["FACT-PROJECT-002-02"]
+    },
+    {
+      "bullet_text": "根据测试反馈完成 2 轮原型迭代。",
+      "experience_id": "EXP-PROJECT-002",
+      "fact_ids": ["FACT-PROJECT-002-03"]
+    },
+    {
+      "bullet_text": "核心任务完成率由 72% 提升至 86%，形成原型迭代的量化结果。",
+      "experience_id": "EXP-PROJECT-002",
+      "fact_ids": ["FACT-PROJECT-002-03"]
+    },
+    {
+      "bullet_text": "调研 8 位求职者并整理 600 条知识条目，为产品设计提供用户与内容基础。",
+      "experience_id": "EXP-PROJECT-001",
+      "fact_ids": ["FACT-PROJECT-001-02"]
+    },
+    {
+      "bullet_text": "设计混合检索、结构化 Prompt 和拒答策略，覆盖岗位解读、流程指引和面试准备 3 类场景。",
+      "experience_id": "EXP-PROJECT-001",
+      "fact_ids": ["FACT-PROJECT-001-01", "FACT-PROJECT-001-02"]
+    },
+    {
+      "bullet_text": "使用 120 条测试集完成 3 轮评测，问答准确率由 74% 提升至 89%，无关问题拒识率达到 91%。",
+      "experience_id": "EXP-PROJECT-001",
+      "fact_ids": ["FACT-PROJECT-001-03"]
+    },
+    {
+      "bullet_text": "AI 方法：RAG、Prompt 工程、评测集设计和低代码 Agent 工作流。",
+      "experience_id": "EXP-SKILL-001",
+      "fact_ids": ["FACT-SKILL-001-01"]
+    },
+    {
+      "bullet_text": "产品与数据工具：Figma、Axure、SQL、Excel、Python。",
+      "experience_id": "EXP-SKILL-001",
+      "fact_ids": ["FACT-SKILL-001-02"]
+    }
+  ]
+}

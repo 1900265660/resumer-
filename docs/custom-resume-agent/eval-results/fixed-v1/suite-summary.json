@@ -1,0 +1,24 @@
+{
+  "passed": true,
+  "truth_gate_passed": true,
+  "quality_gate_passed": true,
+  "improved_dimensions": [
+    "jd_coverage",
+    "evidence_depth",
+    "hr_scan",
+    "language_naturalness"
+  ],
+  "averages_legacy": {
+    "jd_coverage": 6.78,
+    "evidence_depth": 6.96,
+    "hr_scan": 6.8,
+    "language_naturalness": 7.16
+  },
+  "averages_new": {
+    "jd_coverage": 8.16,
+    "evidence_depth": 8.2,
+    "hr_scan": 8.12,
+    "language_naturalness": 8.12
+  },
+  "failures": []
+}

@@ -1,0 +1,33 @@
+{
+  "case_id": "consumer-commerce",
+  "fact_snapshot_sha256": "8006d03e583ddf9166ee8368f3cacdeeab110bce5728645cfb9c60013b59fd54",
+  "candidate_a": {
+    "truth_passed": true,
+    "hard_findings": [],
+    "scores": {
+      "jd_coverage": 8.6,
+      "evidence_depth": 8.5,
+      "hr_scan": 8.4,
+      "language_naturalness": 8.3
+    }
+  },
+  "candidate_b": {
+    "truth_passed": false,
+    "hard_findings": [
+      "“推动高频问题解决率由 68% 提升至 84%，以问题复盘结果验证迭代效果”把已知提升结果进一步解释为对迭代效果的验证；FACT-WORK-001-03 未明示这一验证用途或因果。",
+      "“组织 40 位用户开展可用性测试”补写了候选人的组织所有权；FACT-PROJECT-002-02 只确认通过 40 位用户的可用性测试收集反馈。"
+    ],
+    "scores": {
+      "jd_coverage": 7.5,
+      "evidence_depth": 6.8,
+      "hr_scan": 6.9,
+      "language_naturalness": 6.8
+    }
+  },
+  "evaluator_notes": [
+    "逐条核对 Markdown bullet、trace 与同经历 fact_ids；candidate_a 的经历标题、动作、数字、交付物和结果均有完整支持，能力边界是对事实快照中无直接证据部分的克制披露，不构成能力拔高。",
+    "candidate_a 直接覆盖行为日志分析、偏好分群、冷启动标签、推荐理由、负反馈、收藏引导、原型、可用性测试和任务完成率，并用一条边界准确处理年轻用户 AI 推荐以及互动/留存指标的证据缺口；已披露缺口没有重复扣 jd_coverage。",
+    "candidate_b 的正向经历高度相关，但没有明确处理“年轻用户”“AI 推荐”以及互动、留存指标无直接证据的主要风险，所以 jd_coverage 低于 8，hr_scan 也不能达到 8 分基准。",
+    "candidate_b 将消费推荐项目机械拆成六条，并出现新增验证用途和测试组织所有权；这些真实性问题不能由其丰富的数字证据抵消，因此 evidence_depth 与 language_naturalness 均从严评分。"
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "case_id": "data-strategy",
+  "revision_round": 4,
+  "protocol_correction": "missing_high_priority_gap_boundary",
+  "fact_snapshot_sha256": "8006d03e583ddf9166ee8368f3cacdeeab110bce5728645cfb9c60013b59fd54",
+  "jd_sha256": "78b8a7f1aece26a806743bd55d79b3e29f436b6a98f2bc40c278b6d0f0ef230a",
+  "lanes": {
+    "legacy": {
+      "prompt_paths": [
+        ".agents/prompts/campus-resume-optimizer.md"
+      ]
+    },
+    "new": {
+      "skill_path": ".agents/skills/custom-resume/SKILL.md",
+      "prompt_paths": [
+        ".agents/prompts/custom-resume/jd-analysis.md",
+        ".agents/prompts/custom-resume/writer.md",
+        ".agents/prompts/custom-resume/asu-writer.md",
+        ".agents/prompts/custom-resume/fusion.md",
+        ".agents/prompts/custom-resume/auditor.md"
+      ]
+    }
+  },
+  "custom_resume_prompt_sha256": {
+    ".agents/prompts/custom-resume/jd-analysis.md": "f10feffaa941df179f503f9af04c4946c6e3abdc4fd6279e711c6b5522f16ae8",
+    ".agents/prompts/custom-resume/writer.md": "ae6964dd1588c9ec35fdd1bb4765b84ca5cdccdb90ba9ba104a2c3bfbf772c68",
+    ".agents/prompts/custom-resume/asu-writer.md": "afc4ac86ddad1f06b031acd0094c2a8ccabe9e19f8ae80f4ebb5a87a9bd6d529",
+    ".agents/prompts/custom-resume/fusion.md": "53609f5de72a6eb3649b680454bb56106eb77729fffff303a3c74bbe087f6149",
+    ".agents/prompts/custom-resume/auditor.md": "d044437bb3290792414af0dfe8bd811171c15225eae79a24d25417767710289d"
+  },
+  "generated_formats": {
+    "html": false,
+    "pdf": false
+  }
+}

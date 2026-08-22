@@ -293,6 +293,7 @@ class CoordinatorRun:
     )
     audit_history: list[AuditArtifact] = field(default_factory=list)
     reference_research: ReferenceResearchArtifact | None = None
+    committed_path: Path | None = None
 
     @classmethod
     def create(cls, normalized: NormalizedRunInput) -> "CoordinatorRun":
@@ -586,19 +587,11 @@ class CoordinatorRun:
             self._transition(ContentState.NEEDS_CONTENT_REVIEW)
         return False
 
-    def finalize_content(
-        self,
-        *,
-        approval_granted: bool,
-        referenced_fact_values: dict[str, str],
-        approved_at: datetime | None = None,
-    ) -> Path:
-        if not approval_granted:
-            raise HumanGateError("explicit content approval is required")
+    def commit_for_review(self) -> Path:
         if self.state is not ContentState.NEEDS_CONTENT_REVIEW:
-            raise HumanGateError("content is not ready for approval")
-        if self.current_audit.disposition is not AuditDisposition.PASSED:
-            raise HumanGateError("failed hard/truth audit cannot be approved")
+            raise HumanGateError("content is not ready for review commit")
+        if self.committed_path is not None:
+            return self.committed_path
         if not all(
             [
                 self.jd_analysis,
@@ -613,19 +606,6 @@ class CoordinatorRun:
             raise OrchestrationError("blind-dual run is missing ASu draft")
         if self.execution_mode is ExecutionMode.SINGLE_AGENT_DEGRADED and not self.asu_failure:
             raise OrchestrationError("degraded run is missing the unavailable-agent record")
-        cited = {
-            fact_id
-            for section in self.current_fusion.sections
-            for entry in section.entries
-            for bullet in entry.bullets
-            for fact_id in bullet.fact_ids
-        }
-        missing_values = cited.difference(referenced_fact_values)
-        if missing_values:
-            raise OrchestrationError(
-                f"approval is missing referenced fact values: {sorted(missing_values)}"
-            )
-        self._transition(ContentState.APPROVED)
         self.stage.write_model("input-packet.json", self.packet)
         self.stage.write_model("jd-analysis.json", self.jd_analysis)
         self.stage.write_model("evidence-map.json", self.evidence_map)
@@ -666,18 +646,47 @@ class CoordinatorRun:
             run_id=self.packet.run_id,
             created_at=self.packet.created_at,
             source_digests=self.packet.source_digests,
-            state=ContentState.APPROVED,
+            state=ContentState.NEEDS_CONTENT_REVIEW,
             execution_mode=self.execution_mode,
             input_packet=self.packet,
             artifacts=self.stage.artifact_records(),
             revision_count=len(self.fusion_history) - 1,
         )
-        final_path = self.stage.commit(manifest)
-        missing = validate_run_artifact_completeness(final_path)
+        self.committed_path = self.stage.commit(manifest)
+        missing = validate_run_artifact_completeness(self.committed_path)
         if missing:
             raise OrchestrationError(
                 f"committed run is missing artifacts: {[item.field_path for item in missing]}"
             )
+        return self.committed_path
+
+    def approve_content(
+        self,
+        *,
+        approval_granted: bool,
+        referenced_fact_values: dict[str, str],
+        approved_at: datetime | None = None,
+    ) -> Path:
+        if not approval_granted:
+            raise HumanGateError("explicit content approval is required")
+        if self.state is not ContentState.NEEDS_CONTENT_REVIEW:
+            raise HumanGateError("content is not ready for approval")
+        if self.current_audit.disposition is not AuditDisposition.PASSED:
+            raise HumanGateError("failed hard/truth audit cannot be approved")
+        final_path = self.commit_for_review()
+        cited = {
+            fact_id
+            for section in self.current_fusion.sections
+            for entry in section.entries
+            for bullet in entry.bullets
+            for fact_id in bullet.fact_ids
+        }
+        missing_values = cited.difference(referenced_fact_values)
+        if missing_values:
+            raise OrchestrationError(
+                f"approval is missing referenced fact values: {sorted(missing_values)}"
+            )
+        self._transition(ContentState.APPROVED)
         approve_run(
             self.normalized.application_dir,
             self.packet.run_id,
@@ -685,3 +694,16 @@ class CoordinatorRun:
             approved_at=approved_at,
         )
         return final_path
+
+    def finalize_content(
+        self,
+        *,
+        approval_granted: bool,
+        referenced_fact_values: dict[str, str],
+        approved_at: datetime | None = None,
+    ) -> Path:
+        return self.approve_content(
+            approval_granted=approval_granted,
+            referenced_fact_values=referenced_fact_values,
+            approved_at=approved_at,
+        )

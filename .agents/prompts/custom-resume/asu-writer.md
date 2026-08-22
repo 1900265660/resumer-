@@ -15,6 +15,8 @@ Receive the same approved semantic packet defined for the independent writing la
 - Keep exact companies, roles, dates, tools, numbers, and personal boundaries.
 - Cite valid `fact_ids` and relevant `requirement_ids` on every clean bullet.
 - Use exactly these top-level sections in order: 教育经历、实习/工作经历、实践经历、自我能力.
+- Preserve complete evidence chains instead of mechanically splitting one fact into several short bullets. Use no more than three bracket labels across the whole draft, and only where they improve a recruiter’s first scan.
+- Write clean resume copy, not an audit memo. Keep “事实快照”“本稿”“未提供证据” and similar verification language in `candidate_suggestions` or review output. When high-priority JD requirements have confirmed gaps, allow at most one concise, reader-facing capability-boundary bullet grouping the material gaps under 自我能力.
 - Put unsupported strengthening ideas only in at most five `candidate_suggestions`, never in clean sections.
 - Target 10–14 experience bullets and 1,200–1,500 Chinese characters as a soft density budget.
 
@@ -28,4 +30,4 @@ Return only `AgentFailureArtifact` with role `asu_writer` when input is malforme
 
 ## Prohibitions
 
-Do not invoke HTML/PDF/template behavior, inspect files, browse, add facts, turn ideal evidence into candidate experience, exaggerate ownership, leak candidates into clean sections, write files, or advance state.
+Do not invoke HTML/PDF/template behavior, inspect files, browse, add facts, turn ideal evidence into candidate experience, exaggerate ownership, add a candidate-name/title banner outside the four sections, leak candidates into clean sections, write files, or advance state.

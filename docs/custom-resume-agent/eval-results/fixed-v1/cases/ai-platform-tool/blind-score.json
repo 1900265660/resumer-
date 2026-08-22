@@ -1,0 +1,34 @@
+{
+  "case_id": "ai-platform-tool",
+  "fact_snapshot_sha256": "8006d03e583ddf9166ee8368f3cacdeeab110bce5728645cfb9c60013b59fd54",
+  "candidate_a": {
+    "truth_passed": false,
+    "hard_findings": [
+      "招聘知识库项目第二条 bullet 仅引用 FACT-PROJECT-001-02，却把调研和整理知识条目改写为“形成招聘问答所需的知识内容”，补写了原事实没有陈述的用途。",
+      "招聘知识库项目第三条 bullet 仅引用 FACT-PROJECT-001-02，却以“覆盖检索、回答及无关问题处理”扩写混合检索、结构化 Prompt 与拒答策略的用途范围，超出该事实直接支持的内容。"
+    ],
+    "scores": {
+      "jd_coverage": 7,
+      "evidence_depth": 7,
+      "hr_scan": 7,
+      "language_naturalness": 8
+    }
+  },
+  "candidate_b": {
+    "truth_passed": true,
+    "hard_findings": [],
+    "scores": {
+      "jd_coverage": 8,
+      "evidence_depth": 8,
+      "hr_scan": 8,
+      "language_naturalness": 8
+    }
+  },
+  "evaluator_notes": [
+    "标题核验：A、B 的学校、公司、角色、项目名称和日期均与对应 experience_id 的事实标题一致；标题不要求在 bullet trace 中重复引用。",
+    "A 的 JD 覆盖：检索、回答、反馈、权限模块拆解，跨团队迭代，问题复盘，数据指标与流转，RAG 和评测均有事实证据；平台能力抽象、接口定义与验收标准的核心缺口没有披露，因此低于 8 分。",
+    "A 的证据和扫描：项目动作、方法、交付物与量化结果总体充分，但两条知识库 bullet 补写用途，真实性失败并降低证据严谨性；优势容易识别，主要平台产品能力风险没有出现在正文。",
+    "B 的 JD 覆盖：用事实覆盖模块拆解、算法研发协作、两期迭代、问题监控、权限、RAG、评测和数据治理，并明确披露平台能力抽象、接口定义与验收标准经验仍待补强；已披露缺口不重复扣分。",
+    "B 的证据、扫描与语言：所有 bullet 均由同经历 trace 事实完整支持；核心经历兼具动作、方法、交付物和量化结果，三项岗位相关优势及主要风险可快速识别，语言直接自然且没有审计报告腔。"
+  ]
+}

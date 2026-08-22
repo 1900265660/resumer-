@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "fact_snapshot_sha256": "8006d03e583ddf9166ee8368f3cacdeeab110bce5728645cfb9c60013b59fd54",
+  "cases": {
+    "agent-application": {
+      "assignment": {
+        "candidate_a": "legacy",
+        "candidate_b": "new"
+      },
+      "deterministic_findings": {
+        "legacy": [
+          "EXTRA_TOP_LEVEL_STRUCTURE ['候选人甲｜AI Agent 产品经理']"
+        ],
+        "new": []
+      }
+    },
+    "ai-platform-tool": {
+      "assignment": {
+        "candidate_a": "legacy",
+        "candidate_b": "new"
+      },
+      "deterministic_findings": {
+        "legacy": [
+          "EXTRA_TOP_LEVEL_STRUCTURE ['候选人甲｜AI 平台产品经理']"
+        ],
+        "new": []
+      }
+    },
+    "consumer-commerce": {
+      "assignment": {
+        "candidate_a": "new",
+        "candidate_b": "legacy"
+      },
+      "deterministic_findings": {
+        "legacy": [],
+        "new": []
+      }
+    },
+    "data-strategy": {
+      "assignment": {
+        "candidate_a": "legacy",
+        "candidate_b": "new"
+      },
+      "deterministic_findings": {
+        "legacy": [],
+        "new": []
+      }
+    },
+    "technical-gap": {
+      "assignment": {
+        "candidate_a": "new",
+        "candidate_b": "legacy"
+      },
+      "deterministic_findings": {
+        "legacy": [
+          "FIXED_SECTION_LEVEL_MISMATCH",
+          "EXTRA_TOP_LEVEL_STRUCTURE ['示例大学｜信息管理｜本科｜2022/09–2026/06', '示例科技｜AI 产品实习生｜2025/06–2025/09', 'AI 数据质量看板｜产品策划｜2026/01–2026/03', '招聘知识库问答 Agent｜产品负责人｜2025/03–2025/06', '消费内容推荐实验｜产品策划｜2025/10–2025/12']"
+        ],
+        "new": []
+      }
+    }
+  }
+}
