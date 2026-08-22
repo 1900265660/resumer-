@@ -33,4 +33,4 @@ This reference is the runtime summary of the confirmed V1 workflow. `docs/custom
 
 ## Current availability
 
-T02 creates discovery metadata and this contract only. Runtime execution remains disabled until the later implementation tasks are completed.
+T02–T04 provide discovery metadata, strict domain contracts, state transitions, and a read-only fact-library ID migration preview. Applying the preview and runtime execution remain disabled until the corresponding later tasks are completed and approved.

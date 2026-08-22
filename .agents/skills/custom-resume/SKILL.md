@@ -9,7 +9,7 @@ Produce reviewable Chinese resume content for one AI product manager JD while ke
 
 ## Implementation status
 
-The T02 scaffold and T03 domain schemas/state machine are implemented. Fact migration, subagents, content validators, and orchestration are not complete yet. If invoked before those tasks are complete, explain that `$custom-resume` is not operational and stop; do not imitate the missing workflow with an unstructured rewrite.
+The T02–T04 scaffold, domain contracts, state machine, and read-only fact-ID migration preview are implemented. Applying the migration, subagents, content validators, and orchestration are not complete yet. If invoked before those tasks are complete, explain that `$custom-resume` is not operational and stop; do not imitate the missing workflow with an unstructured rewrite.
 
 ## Boundaries
 
