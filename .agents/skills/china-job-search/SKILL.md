@@ -26,7 +26,13 @@ description: 个人中国求职工作流。用于导入简历/经历、读取标
 
 海投模式：从已有模板/历史材料中选择最合适版本，不改写事实。
 
-定制模式：
+内容定制路由：
+
+- 用户显式调用 `$custom-resume`、要求“调用最新的简历 Skill”、或明确要求“先做定制简历内容验收”时，转入 `.agents/skills/custom-resume/SKILL.md`。该流程只生成内容运行产物和内容审批状态，不生成 HTML/PDF，不做视觉或投递验收。
+- 用户请求 HTML、PDF、模板、视觉验收或完整投递材料且未显式指定 `$custom-resume` 时，继续使用下面的既有定制模式。T12 获批前不得把既有入口标记 deprecated 或静默改为新流程。
+- 新流程的 `manifest.resume_content.status` 独立于本 Skill 的申请主状态；内容批准不得把岗位推进到 `approved`、`filling` 或 `submitted`。
+
+既有定制模式（T12 前仍可用）：
 
 1. 创建简历优化子代理时，必须把 `.agents/agents/resume-optimizer-agent.md` 作为训练配置，把 `.agents/prompts/campus-resume-optimizer.md` 作为改写方法，二者分别读取、分别执行。JD 是材料架构第一优先级，子代理必须完整执行 Master Prompt 的八个阶段，不得直接跳到最终简历。
 1.0 项目内已导入 `asu`、`asu-resume` 和 `resume`。当用户明确要求经历酥化、ASu 同款或 ASu 编辑模板时，可调用相应 Skill；其输出仍必须遵守本工作区的事实库、经历相关度评分、四板块结构和 PDF 验收。除非用户明确要求 ASu 同款，不采用其默认蓝色模板。

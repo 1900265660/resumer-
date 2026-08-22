@@ -114,7 +114,7 @@
 ## T10 主 Harness 集成
 
 - 优先级：P1
-- 状态：pending
+- 状态：completed
 - 目标：让 `china-job-search` 可显式调用新 Skill，同时保持旧流程默认可用。
 - 依赖：T08、T09。
 - 范围：调用边界、岗位 manifest 的 `resume_content` 摘要、内容状态与申请状态隔离。

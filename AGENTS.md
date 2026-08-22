@@ -6,6 +6,7 @@
 
 - 执行软件或 Agent 开发任务前，先读取 `C:\Users\Administrator\.codex\agent开发规范.md`。
 - 定制简历 Agent 的产品、架构、角色、评测、开发和任务边界以 `docs/custom-resume-agent/` 为准。
+- `$custom-resume` 只管理 `manifest.resume_content` 和 `resume-content/`；其内容批准不得推进岗位申请主状态，也不得生成 PDF 或触发投递。
 - 该模块文档未经用户确认前，只能修改文档、入口和隐私规则，不得实现运行代码。
 - `.agents/agent开发流程.txt` 是兼容入口，不再作为独立产品规范。
 
