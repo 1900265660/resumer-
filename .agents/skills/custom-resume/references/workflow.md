@@ -33,4 +33,4 @@ This reference is the runtime summary of the confirmed V1 workflow. `docs/custom
 
 ## Current availability
 
-T02–T04 and T06 provide discovery metadata, strict domain contracts, state transitions, a read-only fact-library ID migration preview, and immutable run/current-pointer storage. Applying the preview and runtime orchestration remain disabled until the corresponding later tasks are completed and approved.
+T02–T09 implement the standalone content-only workflow. Every semantic agent return must pass the code contracts and coordinator gates before persistence. T10–T12 still control main-harness routing, fixed evaluation, and legacy-default cutover.

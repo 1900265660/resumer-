@@ -9,7 +9,7 @@ Produce reviewable Chinese resume content for one AI product manager JD while ke
 
 ## Implementation status
 
-T02–T07 provide the scaffold, domain contracts, state machine, approved fact-ID migration, immutable storage, structured prompts, and three read-only project agents. Content validators and orchestration are not complete yet. If invoked before those tasks are complete, explain that `$custom-resume` is not operational and stop; do not imitate the missing workflow with an unstructured rewrite.
+T02–T09 provide the complete standalone content workflow: contracts, fact IDs, immutable storage, structured prompts, read-only agents, coordinator gates, deterministic validators, fusion, audit, and content approval. Main-harness routing and fixed evaluation evidence are still pending; do not claim V1 has replaced the legacy default until T10–T12 gates are satisfied.
 
 ## Boundaries
 

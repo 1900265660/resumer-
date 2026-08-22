@@ -125,7 +125,26 @@ class RunStage:
         payload = _json_bytes(model)
         target.write_bytes(payload)
         record = ArtifactRecord(
-            name=target.stem,
+            name=Path(normalized).with_suffix("").as_posix().replace("/", "::"),
+            relative_path=normalized,
+            sha256=sha256_bytes(payload),
+        )
+        self._records[normalized] = record
+        return record
+
+    def write_text(self, relative_path: str, content: str) -> ArtifactRecord:
+        if self._committed:
+            raise StorageError("cannot write to a committed run")
+        relative = _safe_relative_path(relative_path)
+        normalized = relative.as_posix()
+        if normalized in self._records or normalized == "run.json":
+            raise StorageError(f"artifact already written: {normalized}")
+        target = self.path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        payload = content.encode("utf-8")
+        target.write_bytes(payload)
+        record = ArtifactRecord(
+            name=Path(normalized).with_suffix("").as_posix().replace("/", "::"),
             relative_path=normalized,
             sha256=sha256_bytes(payload),
         )

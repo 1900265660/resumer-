@@ -63,6 +63,25 @@ class MigrationReport:
     body_preserved: bool
 
 
+@dataclass(frozen=True)
+class FactRecord:
+    fact_id: str
+    experience_id: str
+    value: str
+    provenance: str
+    line_number: int
+    metadata: dict[str, str]
+
+
+@dataclass(frozen=True)
+class ExperienceRecord:
+    experience_id: str
+    category: str
+    heading: str
+    immutable_tokens: tuple[str, ...]
+    facts: tuple[FactRecord, ...]
+
+
 def sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
@@ -219,6 +238,111 @@ def _preflight_metadata(lines: Iterable[str]) -> tuple[set[str], set[str]]:
         _, metadata = parse_metadata(body, line_number)
         validate_metadata(metadata, line_number, experience_ids, fact_ids)
     return experience_ids, fact_ids
+
+
+def _clean_list_value(value: str) -> str:
+    if BULLET_RE.match(value):
+        return value[2:].strip()
+    if ORDERED_RE.match(value):
+        return re.sub(r"^\d+\.\s+", "", value).strip()
+    return value.strip()
+
+
+def _immutable_tokens(category: str, heading: str) -> tuple[str, ...]:
+    if category in HEADING_EXPERIENCES:
+        return tuple(part.strip() for part in heading.split("｜") if part.strip())
+    if category == "EDU":
+        parts = [part.strip() for part in re.split(r"[，,]", heading) if part.strip()]
+        tokens: list[str] = []
+        if parts:
+            tokens.append(parts[0])
+        if len(parts) >= 3:
+            tokens.append(parts[2])
+        date = re.search(r"\d{4}/\d{2}\s*[–—~-]\s*(?:\d{4}/\d{2}|至今)", heading)
+        if date:
+            tokens.append(date.group(0))
+        return tuple(tokens)
+    return ()
+
+
+def parse_fact_records(source_text: str) -> tuple[dict[str, ExperienceRecord], dict[str, FactRecord]]:
+    lines = source_text.splitlines(keepends=True)
+    _preflight_metadata(lines)
+    current_category: str | None = None
+    current_experience_id: str | None = None
+    headings: dict[str, tuple[str, str, tuple[str, ...]]] = {}
+    facts_by_experience: dict[str, list[FactRecord]] = {}
+    facts: dict[str, FactRecord] = {}
+
+    for line_number, line in enumerate(lines, start=1):
+        body, _ = split_line_ending(line)
+        clean, metadata = parse_metadata(body, line_number)
+        h2 = H2_RE.fullmatch(clean)
+        h3 = H3_RE.fullmatch(clean)
+        if h2:
+            current_category = SECTION_CATEGORIES.get(h2.group("title"))
+            current_experience_id = metadata.get("experience_id")
+            if current_experience_id:
+                heading = h2.group("title")
+                headings[current_experience_id] = (
+                    current_category or "UNKNOWN",
+                    heading,
+                    _immutable_tokens(current_category or "UNKNOWN", heading),
+                )
+        elif h3 and current_category in HEADING_EXPERIENCES:
+            current_experience_id = metadata.get("experience_id")
+            if current_experience_id:
+                heading = h3.group("title")
+                headings[current_experience_id] = (
+                    current_category,
+                    heading,
+                    _immutable_tokens(current_category, heading),
+                )
+        elif current_category == "EDU" and ORDERED_RE.match(clean):
+            current_experience_id = metadata.get("experience_id")
+            if current_experience_id:
+                heading = _clean_list_value(clean)
+                headings[current_experience_id] = (
+                    current_category,
+                    heading,
+                    _immutable_tokens(current_category, heading),
+                )
+        fact_id = metadata.get("fact_id")
+        if fact_id:
+            if current_experience_id is None:
+                raise FactLibraryError(
+                    f"line {line_number}: fact_id has no current experience"
+                )
+            assert_fact_belongs_to_experience(
+                fact_id, current_experience_id, line_number
+            )
+            record = FactRecord(
+                fact_id=fact_id,
+                experience_id=current_experience_id,
+                value=_clean_list_value(clean),
+                provenance=metadata["provenance"],
+                line_number=line_number,
+                metadata=dict(metadata),
+            )
+            facts[fact_id] = record
+            facts_by_experience.setdefault(current_experience_id, []).append(record)
+
+    missing_headings = set(facts_by_experience).difference(headings)
+    if missing_headings:
+        raise FactLibraryError(
+            f"facts reference experiences without headings: {sorted(missing_headings)}"
+        )
+    experiences = {
+        experience_id: ExperienceRecord(
+            experience_id=experience_id,
+            category=category,
+            heading=heading,
+            immutable_tokens=tokens,
+            facts=tuple(facts_by_experience.get(experience_id, [])),
+        )
+        for experience_id, (category, heading, tokens) in headings.items()
+    }
+    return experiences, facts
 
 
 def migrate_text(source_text: str) -> tuple[str, MigrationReport]:

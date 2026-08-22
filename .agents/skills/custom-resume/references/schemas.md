@@ -26,6 +26,8 @@ Unknown fields are rejected unless a later documented schema revision explicitly
 | `fusion.json` | Fused bullets, source decisions, rewrite reasons, and fact IDs |
 | `audit.json` | Deterministic gates, truth audit, quality scores, revisions, and overrides |
 | `current.json` | Approved/stale run pointer and referenced-fact value digests |
+| `validation.json` | Stable hard/warning findings and content-budget metrics |
+| `reference-research.json` | Local/supplemented/degraded method-card routing evidence |
 
 `fact-diff.json` may contain at most five structured option-style questions. The number of confirmed add/replace operations is not coupled to the question count.
 
@@ -37,4 +39,4 @@ Unknown fields are rejected unless a later documented schema revision explicitly
 
 ## Implementation
 
-The models, strict enumerations, cross-field validators, transition guard, and JSON Schema exporter are implemented in `scripts/models.py`. Immutable run commits, transactional approval pointers, and referenced-fact staleness checks are implemented in `scripts/storage.py`. Later tasks add orchestration and full content validation; callers must not treat these components as proof that a complete run is operational.
+The models, strict enumerations, cross-field validators, transition guard, and JSON Schema exporter are implemented in `scripts/models.py`. Immutable storage lives in `scripts/storage.py`, fact parsing/migration in `scripts/fact_library.py`, deterministic hard gates in `scripts/validators.py`, and the content-only state machine orchestration in `scripts/orchestrator.py`.

@@ -97,6 +97,17 @@ class AgentRole(StringEnum):
     AUDITOR = "auditor"
 
 
+class ExecutionMode(StringEnum):
+    BLIND_DUAL = "blind_dual"
+    SINGLE_AGENT_DEGRADED = "single_agent_degraded"
+
+
+class ReferenceResearchMode(StringEnum):
+    LOCAL = "local"
+    SUPPLEMENTED = "supplemented"
+    DEGRADED = "degraded"
+
+
 class ResumeSectionName(StringEnum):
     EDUCATION = "教育经历"
     WORK = "实习/工作经历"
@@ -352,8 +363,21 @@ class FactDiffArtifact(ArtifactBase):
         _ensure_unique(question_ids, "questions.question_id")
         statuses = {item.confirmation_status for item in self.operations}
         if not self.operations:
-            if self.confirmation_status is not ConfirmationStatus.PENDING:
-                raise ValueError("an empty fact diff must remain pending")
+            question_statuses = {item.status for item in self.questions}
+            if not self.questions and self.confirmation_status is not ConfirmationStatus.PENDING:
+                raise ValueError("an empty fact diff without questions must remain pending")
+            if self.confirmation_status is ConfirmationStatus.PENDING and question_statuses.difference(
+                {QuestionStatus.UNANSWERED}
+            ):
+                raise ValueError("pending fact questions must remain unanswered")
+            if self.confirmation_status is ConfirmationStatus.REJECTED and (
+                not self.questions or question_statuses != {QuestionStatus.SKIPPED}
+            ):
+                raise ValueError("rejected question-only diff requires every question to be skipped")
+            if self.confirmation_status is ConfirmationStatus.APPROVED and (
+                not self.questions or QuestionStatus.UNANSWERED in question_statuses
+            ):
+                raise ValueError("approved question-only diff requires every question to be resolved")
             return self
         if self.confirmation_status is ConfirmationStatus.APPROVED and statuses != {
             ConfirmationStatus.APPROVED
@@ -528,6 +552,25 @@ class AuditFinding(StrictModel):
     message: str = Field(min_length=1)
 
 
+class ContentMetrics(StrictModel):
+    chinese_character_count: Annotated[int, Field(ge=0)]
+    experience_bullet_count: Annotated[int, Field(ge=0)]
+    total_bullet_count: Annotated[int, Field(ge=0)]
+
+
+class DeterministicValidationArtifact(ArtifactBase):
+    passed: bool
+    findings: list[AuditFinding] = Field(default_factory=list)
+    metrics: ContentMetrics
+
+    @model_validator(mode="after")
+    def passed_must_match_hard_findings(self) -> "DeterministicValidationArtifact":
+        hard_failures = any(item.severity is Severity.HARD for item in self.findings)
+        if self.passed == hard_failures:
+            raise ValueError("validation passed flag must be the inverse of hard findings")
+        return self
+
+
 class TruthAudit(StrictModel):
     passed: bool
     findings: list[AuditFinding] = Field(default_factory=list)
@@ -629,8 +672,45 @@ class AgentFailureArtifact(ArtifactBase):
         return _ensure_unique(value, "missing_inputs")
 
 
+class ReferenceSource(StrictModel):
+    title: str = Field(min_length=1)
+    url: str = Field(pattern=r"^https://[^\s]+$")
+    retrieved_at: datetime
+
+    @field_validator("retrieved_at")
+    @classmethod
+    def retrieved_at_must_be_timezone_aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("retrieved_at must include a timezone")
+        return value
+
+
+class ReferenceResearchArtifact(ArtifactBase):
+    mode: ReferenceResearchMode
+    local_card_sha256: Sha256
+    missing_topics: list[str] = Field(default_factory=list)
+    sources: list[ReferenceSource] = Field(default_factory=list)
+    sanitized_method_cards: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+    @model_validator(mode="after")
+    def research_mode_must_match_evidence(self) -> "ReferenceResearchArtifact":
+        _ensure_unique(self.missing_topics, "missing_topics")
+        _ensure_unique([item.url for item in self.sources], "sources.url")
+        if self.mode is ReferenceResearchMode.LOCAL:
+            if self.sources or self.sanitized_method_cards or self.error:
+                raise ValueError("local reference mode cannot contain network results")
+        elif self.mode is ReferenceResearchMode.SUPPLEMENTED:
+            if not self.sources or not self.sanitized_method_cards or self.error:
+                raise ValueError("supplemented mode requires sources and sanitized cards")
+        elif not self.error:
+            raise ValueError("degraded reference mode requires an error")
+        return self
+
+
 class RunManifestArtifact(ArtifactBase):
     state: ContentState
+    execution_mode: ExecutionMode = ExecutionMode.BLIND_DUAL
     input_packet: NormalizedInputPacket
     artifacts: list[ArtifactRecord] = Field(default_factory=list)
     revision_count: Annotated[int, Field(ge=0, le=2)] = 0
@@ -757,6 +837,8 @@ ARTIFACT_MODELS: dict[str, type[BaseModel]] = {
     "audit": AuditArtifact,
     "current": CurrentPointer,
     "agent-failure": AgentFailureArtifact,
+    "validation": DeterministicValidationArtifact,
+    "reference-research": ReferenceResearchArtifact,
 }
 
 

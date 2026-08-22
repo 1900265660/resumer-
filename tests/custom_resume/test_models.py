@@ -190,7 +190,7 @@ def test_empty_fact_diff_represents_no_proposed_changes() -> None:
     )
     assert artifact.operations == []
 
-    with pytest.raises(ValidationError, match="must remain pending"):
+    with pytest.raises(ValidationError, match="without questions must remain pending"):
         FactDiffArtifact(
             **artifact_base(),
             source_fact_sha256=HASH_B,
@@ -264,7 +264,7 @@ def test_fusion_drop_and_output_shapes_are_mutually_exclusive() -> None:
 
 def test_schema_export_produces_valid_json_for_all_artifacts(tmp_path: Path) -> None:
     written = export_json_schemas(tmp_path)
-    assert len(written) == 10
+    assert len(written) == 12
     assert {path.name for path in written} == {
         "input-packet.schema.json",
         "run.schema.json",
@@ -276,6 +276,8 @@ def test_schema_export_produces_valid_json_for_all_artifacts(tmp_path: Path) -> 
         "audit.schema.json",
         "current.schema.json",
         "agent-failure.schema.json",
+        "validation.schema.json",
+        "reference-research.schema.json",
     }
     for path in written:
         schema = json.loads(path.read_text(encoding="utf-8"))
