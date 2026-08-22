@@ -25,6 +25,7 @@ Unknown fields are rejected unless a later documented schema revision explicitly
 | `draft-asu.json` | ASu Writer output using the same draft contract |
 | `fusion.json` | Fused bullets, source decisions, rewrite reasons, and fact IDs |
 | `audit.json` | Deterministic gates, truth audit, quality scores, revisions, and overrides |
+| `current.json` | Approved/stale run pointer and referenced-fact value digests |
 
 `fact-diff.json` may contain at most five structured option-style questions. The number of confirmed add/replace operations is not coupled to the question count.
 
@@ -36,4 +37,4 @@ Unknown fields are rejected unless a later documented schema revision explicitly
 
 ## Implementation
 
-The models, strict enumerations, cross-field validators, transition guard, and JSON Schema exporter are implemented in `scripts/models.py`. Later tasks add persistence, orchestration, and full content validation; callers must not treat the existence of these models as proof that a complete run is operational.
+The models, strict enumerations, cross-field validators, transition guard, and JSON Schema exporter are implemented in `scripts/models.py`. Immutable run commits, transactional approval pointers, and referenced-fact staleness checks are implemented in `scripts/storage.py`. Later tasks add orchestration and full content validation; callers must not treat these components as proof that a complete run is operational.

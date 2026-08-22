@@ -629,6 +629,60 @@ class RunManifestArtifact(ArtifactBase):
         return self
 
 
+class ReferencedFactDigest(StrictModel):
+    fact_id: FactId
+    value_sha256: Sha256
+
+
+class CurrentPointer(StrictModel):
+    schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
+    status: ContentState
+    approved_run_id: RunId
+    run_relative_path: str = Field(
+        pattern=r"^resume-content[\\/]runs[\\/]cr_[0-9]{8}T[0-9]{6}_[a-z0-9]{6}$"
+    )
+    approved_at: datetime
+    updated_at: datetime
+    transaction_id: str = Field(pattern=r"^approval_[a-f0-9]{32}$")
+    referenced_facts: list[ReferencedFactDigest] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def pointer_must_be_consistent(self) -> "CurrentPointer":
+        if self.status not in {ContentState.APPROVED, ContentState.STALE}:
+            raise ValueError("current pointer status must be approved or stale")
+        expected_suffix = f"runs/{self.approved_run_id}"
+        normalized_path = self.run_relative_path.replace("\\", "/")
+        if not normalized_path.endswith(expected_suffix):
+            raise ValueError("run_relative_path must reference approved_run_id")
+        for field_name in ("approved_at", "updated_at"):
+            value = getattr(self, field_name)
+            if value.tzinfo is None or value.utcoffset() is None:
+                raise ValueError(f"{field_name} must include a timezone")
+        _ensure_unique(
+            [item.fact_id for item in self.referenced_facts],
+            "referenced_facts.fact_id",
+        )
+        return self
+
+
+class ResumeContentSummary(StrictModel):
+    status: ContentState
+    current_pointer: Literal["resume-content/current.json"] = (
+        "resume-content/current.json"
+    )
+    approved_run_id: RunId
+    updated_at: datetime
+    transaction_id: str = Field(pattern=r"^approval_[a-f0-9]{32}$")
+
+    @model_validator(mode="after")
+    def summary_must_reference_approved_content(self) -> "ResumeContentSummary":
+        if self.status not in {ContentState.APPROVED, ContentState.STALE}:
+            raise ValueError("resume content summary status must be approved or stale")
+        if self.updated_at.tzinfo is None or self.updated_at.utcoffset() is None:
+            raise ValueError("updated_at must include a timezone")
+        return self
+
+
 ALLOWED_TRANSITIONS: dict[ContentState, frozenset[ContentState]] = {
     ContentState.NOT_STARTED: frozenset({ContentState.ANALYZING, ContentState.FAILED}),
     ContentState.ANALYZING: frozenset(
@@ -681,6 +735,7 @@ ARTIFACT_MODELS: dict[str, type[BaseModel]] = {
     "draft": DraftArtifact,
     "fusion": FusionArtifact,
     "audit": AuditArtifact,
+    "current": CurrentPointer,
 }
 
 

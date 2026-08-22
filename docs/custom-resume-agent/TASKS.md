@@ -74,7 +74,7 @@
 ## T06 不可变运行与产物存储
 
 - 优先级：P0
-- 状态：pending
+- 状态：completed
 - 目标：实现运行目录、原子提交、当前指针和精准失效。
 - 依赖：T03、T04。
 - 范围：run ID、临时目录、产物清单、current pointer、manifest 摘要、引用事实 digest。
