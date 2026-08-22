@@ -1,6 +1,6 @@
 # 定制简历 Agent V1 任务清单
 
-> 状态：实现阶段  
+> 状态：实现阶段
 > 规则：用户确认本套文档前，不得开始 T02 及之后的实现任务。每次只执行一个 Task。
 
 ## 状态说明
@@ -33,7 +33,7 @@
 ## T02 Skill 脚手架与依赖清单
 
 - 优先级：P0
-- 状态：in_progress
+- 状态：completed
 - 目标：建立可发现但尚不执行完整业务的 `$custom-resume` Skill 骨架和 Python 测试环境。
 - 依赖：T01 用户确认。
 - 范围：`SKILL.md`、`agents/openai.yaml`、必要 references/scripts 目录、项目依赖清单、测试目录。
