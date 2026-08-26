@@ -1,0 +1,35 @@
+{
+  "case_id": "deepblue-overcompressed-truthful-draft",
+  "description": "真实性和基础五项质量均通过，但核心经历叙事不完整且遗漏已确认高价值事实。",
+  "base_audit": {
+    "truth_passed": true,
+    "quality_passed": true,
+    "jd_coverage": 8.0,
+    "selection_quality": 9.0,
+    "evidence_depth": 9.0,
+    "hr_scan": 8.5,
+    "language_naturalness": 8.5
+  },
+  "content_metrics": {
+    "chinese_character_count": 916,
+    "experience_bullet_count": 9,
+    "maximum_chinese_characters": 1500,
+    "maximum_experience_bullets": 14
+  },
+  "confirmed_but_omitted_fact_ids": [
+    "FACT-WORK-001-04",
+    "FACT-PROJECT-011-02",
+    "FACT-PROJECT-011-03",
+    "FACT-PROJECT-014-01"
+  ],
+  "expected_hr_review": {
+    "passed": false,
+    "recommendation": "hesitate",
+    "disposition": "needs_input",
+    "issue_codes": [
+      "OVER_COMPRESSED_CORE_EVIDENCE",
+      "HIGH_VALUE_CONFIRMED_FACTS_OMITTED",
+      "MISSING_OWNERSHIP_METHOD_RISK_DETAIL"
+    ]
+  }
+}

@@ -11,6 +11,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from fact_library import parse_fact_records
+from models import CapabilityCategory, CapabilityTransferMapArtifact, TransferDistance
 from validators import extract_numeric_claims
 
 
@@ -23,12 +24,16 @@ FIXED_CATEGORIES = {
 }
 SUPPORTED_EVAL_CATEGORIES = FIXED_CATEGORIES | {"game_production_pm"}
 DIMENSIONS = ("jd_coverage", "evidence_depth", "hr_scan", "language_naturalness")
+V12_DIMENSIONS = (*DIMENSIONS, "selection_quality")
 AI_FIXED_PROMPTS = {
     "asu-writer.md",
     "auditor.md",
     "fusion.md",
     "jd-analysis.md",
     "writer.md",
+    "capability-transfer.md",
+    "experience-selection.md",
+    "selection-audit.md",
 }
 GAME_EXTENSION_PROMPTS = {
     "asu-writer-game-production.md",
@@ -36,6 +41,9 @@ GAME_EXTENSION_PROMPTS = {
     "fusion.md",
     "jd-analysis-game-production.md",
     "writer-game-production.md",
+    "capability-transfer.md",
+    "experience-selection.md",
+    "selection-audit.md",
 }
 FIXED_SECTIONS = ("教育经历", "实习/工作经历", "实践经历", "自我能力")
 PHONE_RE = re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")
@@ -76,6 +84,23 @@ class QualityScores(EvalModel):
     evidence_depth: float = Field(ge=0, le=10)
     hr_scan: float = Field(ge=0, le=10)
     language_naturalness: float = Field(ge=0, le=10)
+    selection_quality: float | None = Field(default=None, ge=0, le=10)
+
+
+class TransferExpectation(EvalModel):
+    experience_id: str = Field(pattern=r"^EXP-[A-Z]+-[0-9]{3}$")
+    category: CapabilityCategory
+    fact_ids: list[str] = Field(min_length=1)
+    requirement_ids: list[str] = Field(min_length=1)
+
+
+class TransferDiagnostics(EvalModel):
+    transfer_recall: float = Field(ge=0, le=1)
+    transfer_precision: float = Field(ge=0, le=1)
+    matched_expectations: int = Field(ge=0)
+    expected_supported: int = Field(ge=0)
+    writable_transfers: int = Field(ge=0)
+    precise_writable_transfers: int = Field(ge=0)
 
 
 class CandidateEval(EvalModel):
@@ -140,6 +165,49 @@ def sha256_bytes(value: bytes) -> str:
 def assert_sanitized(value: str, source: str) -> None:
     if PHONE_RE.search(value) or EMAIL_RE.search(value):
         raise ValueError(f"sensitive contact data found in {source}")
+
+
+def evaluate_transfer_diagnostics(
+    artifact: CapabilityTransferMapArtifact,
+    expectations: list[TransferExpectation],
+) -> TransferDiagnostics:
+    """Calculate deterministic recall/precision for a frozen transfer fixture.
+
+    Candidate chains are intentionally excluded from writable precision because
+    their Schema contract already forces zero credit and no writable scope.
+    """
+    writable = [
+        item
+        for item in artifact.transfers
+        if item.distance is not TransferDistance.CANDIDATE
+    ]
+
+    def matches(transfer: object, expectation: TransferExpectation) -> bool:
+        return bool(
+            transfer.experience_id == expectation.experience_id
+            and transfer.category is expectation.category
+            and set(expectation.fact_ids).issubset(transfer.fact_ids)
+            and set(expectation.requirement_ids).issubset(transfer.requirement_ids)
+        )
+
+    matched_expectations = sum(
+        any(matches(transfer, expectation) for transfer in writable)
+        for expectation in expectations
+    )
+    precise_writable = sum(
+        any(matches(transfer, expectation) for expectation in expectations)
+        for transfer in writable
+    )
+    recall = matched_expectations / len(expectations) if expectations else 1.0
+    precision = precise_writable / len(writable) if writable else 1.0
+    return TransferDiagnostics(
+        transfer_recall=recall,
+        transfer_precision=precision,
+        matched_expectations=matched_expectations,
+        expected_supported=len(expectations),
+        writable_transfers=len(writable),
+        precise_writable_transfers=precise_writable,
+    )
 
 
 def load_cases(fixtures_root: Path) -> list[EvalCase]:
@@ -392,6 +460,17 @@ def summarize_suite(cases: list[CaseEvaluation], fixture_cases: list[EvalCase]) 
     if actual_ids != set(expected) or len(cases) != len(expected):
         raise ValueError("suite results must contain each fixed case exactly once")
     failures: list[str] = []
+    selection_scores = [
+        getattr(item, lane).scores.selection_quality
+        for item in cases
+        for lane in ("legacy", "new")
+    ]
+    use_selection_quality = any(score is not None for score in selection_scores)
+    if use_selection_quality and any(score is None for score in selection_scores):
+        raise ValueError(
+            "V1.2 evaluation requires selection_quality for both lanes in every case"
+        )
+    dimensions = V12_DIMENSIONS if use_selection_quality else DIMENSIONS
     for item in cases:
         if item.fact_snapshot_sha256 != expected[item.case_id].fact_snapshot_sha256:
             failures.append(f"{item.case_id}: fact snapshot mismatch")
@@ -399,12 +478,12 @@ def summarize_suite(cases: list[CaseEvaluation], fixture_cases: list[EvalCase]) 
             failures.append(f"{item.case_id}: new truth gate failed")
         if item.legacy.truth_passed and not item.new.truth_passed:
             failures.append(f"{item.case_id}: truth regressed")
-        for dimension in DIMENSIONS:
+        for dimension in dimensions:
             if getattr(item.new.scores, dimension) < 8:
                 failures.append(f"{item.case_id}: new {dimension} below 8")
     averages: dict[str, dict[str, float]] = {"legacy": {}, "new": {}}
     for lane in ("legacy", "new"):
-        for dimension in DIMENSIONS:
+        for dimension in dimensions:
             averages[lane][dimension] = round(
                 sum(getattr(getattr(item, lane).scores, dimension) for item in cases)
                 / len(cases),
@@ -412,7 +491,7 @@ def summarize_suite(cases: list[CaseEvaluation], fixture_cases: list[EvalCase]) 
             )
     improved = [
         dimension
-        for dimension in DIMENSIONS
+        for dimension in dimensions
         if averages["new"][dimension] > averages["legacy"][dimension]
     ]
     if len(improved) < 3:
@@ -421,7 +500,7 @@ def summarize_suite(cases: list[CaseEvaluation], fixture_cases: list[EvalCase]) 
     quality_gate = all(
         getattr(item.new.scores, dimension) >= 8
         for item in cases
-        for dimension in DIMENSIONS
+        for dimension in dimensions
     ) and len(improved) >= 3
     return SuiteSummary(
         passed=not failures,

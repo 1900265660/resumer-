@@ -1,0 +1,117 @@
+{
+  "$defs": {
+    "AgentRole": {
+      "enum": [
+        "coordinator",
+        "writer",
+        "asu_writer",
+        "auditor",
+        "hr_reviewer"
+      ],
+      "title": "AgentRole",
+      "type": "string"
+    },
+    "SourceDigests": {
+      "additionalProperties": false,
+      "properties": {
+        "jd_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Jd Sha256",
+          "type": "string"
+        },
+        "fact_snapshot_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fact Snapshot Sha256",
+          "type": "string"
+        },
+        "preferences_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Preferences Sha256",
+          "type": "string"
+        },
+        "reference_cards_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Cards Sha256"
+        }
+      },
+      "required": [
+        "jd_sha256",
+        "fact_snapshot_sha256",
+        "preferences_sha256"
+      ],
+      "title": "SourceDigests",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": "1.3",
+      "enum": [
+        "1.0",
+        "1.1",
+        "1.2",
+        "1.3"
+      ],
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^cr_[0-9]{8}T[0-9]{6}_[a-z0-9]{6}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "source_digests": {
+      "$ref": "#/$defs/SourceDigests"
+    },
+    "role": {
+      "$ref": "#/$defs/AgentRole"
+    },
+    "error_code": {
+      "pattern": "^[A-Z][A-Z0-9_]+$",
+      "title": "Error Code",
+      "type": "string"
+    },
+    "message": {
+      "minLength": 1,
+      "title": "Message",
+      "type": "string"
+    },
+    "missing_inputs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Missing Inputs",
+      "type": "array"
+    },
+    "retryable": {
+      "title": "Retryable",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "run_id",
+    "created_at",
+    "source_digests",
+    "role",
+    "error_code",
+    "message",
+    "retryable"
+  ],
+  "title": "AgentFailureArtifact",
+  "type": "object"
+}

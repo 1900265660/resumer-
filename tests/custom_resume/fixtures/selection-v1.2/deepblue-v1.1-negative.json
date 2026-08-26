@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "case_id": "deepblue-v1.1-selection-failure",
+  "truth_expected": true,
+  "selection_quality_expected": false,
+  "total_bullets": 12,
+  "selected": [
+    {"experience_id": "EXP-WORK-005", "score": 84, "bullets": 3},
+    {"experience_id": "EXP-PROJECT-009", "score": 52, "bullets": 2},
+    {"experience_id": "EXP-PROJECT-010", "score": 50, "bullets": 1},
+    {"experience_id": "EXP-PROJECT-011", "score": 56, "bullets": 4},
+    {"experience_id": "EXP-PROJECT-014", "score": 77, "bullets": 2}
+  ],
+  "omitted": [
+    {"experience_id": "EXP-PROJECT-001", "score": 73, "reason": null},
+    {"experience_id": "EXP-PROJECT-006", "score": 71, "reason": null},
+    {"experience_id": "EXP-PROJECT-015", "score": 76, "reason": null}
+  ]
+}

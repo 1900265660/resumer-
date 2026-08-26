@@ -17,6 +17,12 @@ from models import (  # noqa: E402
     AuditArtifact,
     AuditDisposition,
     ContentState,
+    HrDecisionDimension,
+    HrExperienceReview,
+    HrRecommendation,
+    HrReviewArtifact,
+    HrReviewDisposition,
+    InterviewImpact,
     NormalizedInputPacket,
     QualityAudit,
     QualityDimension,
@@ -29,6 +35,7 @@ from storage import (  # noqa: E402
     PointerConsistencyError,
     RunAlreadyExistsError,
     RunIntegrityError,
+    StorageError,
     approve_run,
     begin_run,
     create_run_id,
@@ -56,6 +63,7 @@ def digests() -> SourceDigests:
 
 def input_packet(run_id: str = RUN_ID) -> NormalizedInputPacket:
     return NormalizedInputPacket(
+        schema_version="1.2",
         run_id=run_id,
         created_at=NOW,
         source_digests=digests(),
@@ -68,6 +76,7 @@ def input_packet(run_id: str = RUN_ID) -> NormalizedInputPacket:
 def passed_audit(run_id: str = RUN_ID) -> AuditArtifact:
     dimension = QualityDimension(score=8.5, evidence=["达到门槛"])
     return AuditArtifact(
+        schema_version="1.2",
         run_id=run_id,
         created_at=NOW,
         source_digests=digests(),
@@ -75,12 +84,49 @@ def passed_audit(run_id: str = RUN_ID) -> AuditArtifact:
         truth=TruthAudit(passed=True),
         quality=QualityAudit(
             jd_coverage=dimension,
+            selection_quality=dimension,
             evidence_depth=dimension,
             hr_scan=dimension,
             language_naturalness=dimension,
             passed=True,
         ),
         disposition=AuditDisposition.PASSED,
+    )
+
+
+def passed_hr_review(
+    *, source_digests: SourceDigests | None = None
+) -> HrReviewArtifact:
+    dimension = HrDecisionDimension(score=8.5, evidence=["达到高标准"])
+    return HrReviewArtifact(
+        schema_version="1.3",
+        run_id=RUN_ID,
+        created_at=NOW,
+        source_digests=source_digests or digests(),
+        revision_round=0,
+        recommendation=HrRecommendation.STRONG_PUSH,
+        overall_score=8.5,
+        role_fit=dimension,
+        narrative_completeness=dimension,
+        evidence_specificity=dimension,
+        decision_readiness=dimension,
+        credibility=dimension,
+        experience_reviews=[
+            HrExperienceReview(
+                experience_id="EXP-PROJECT-001",
+                ten_second_impression="招聘证据完整，可推进面试。",
+                effective_requirement_ids=["REQ-001"],
+                strengths=["事实可追溯"],
+                severity_score=0,
+                interview_impact=InterviewImpact.NONE,
+                recommended_bullet_count=3,
+            )
+        ],
+        existing_fact_revision_sufficient=False,
+        fact_questions_required=False,
+        reselect_required=False,
+        passed=True,
+        disposition=HrReviewDisposition.PASSED,
     )
 
 
@@ -99,6 +145,7 @@ def commit_approved_run(application: Path, run_id: str = RUN_ID) -> Path:
     stage.write_model("audit.json", passed_audit(run_id))
     packet = input_packet(run_id)
     manifest = RunManifestArtifact(
+        schema_version="1.2",
         run_id=run_id,
         created_at=NOW,
         source_digests=digests(),
@@ -166,6 +213,116 @@ def test_approval_pointer_preserves_application_state(tmp_path: Path) -> None:
     assert validated == pointer
     assert job_manifest["status"] == "analyzed"
     assert job_manifest["resume_content"]["status"] == "approved"
+
+
+def test_schema_v13_approval_requires_passing_hr_decision_gate(tmp_path: Path) -> None:
+    application = create_application(tmp_path)
+    stage = begin_run(application, RUN_ID)
+    dimension = QualityDimension(score=8.5, evidence=["基础审计通过"])
+    audit = AuditArtifact(
+        schema_version="1.3",
+        run_id=RUN_ID,
+        created_at=NOW,
+        source_digests=digests(),
+        deterministic_passed=True,
+        truth=TruthAudit(passed=True),
+        quality=QualityAudit(
+            jd_coverage=dimension,
+            selection_quality=dimension,
+            evidence_depth=dimension,
+            hr_scan=dimension,
+            language_naturalness=dimension,
+            passed=True,
+        ),
+        disposition=AuditDisposition.PASSED,
+    )
+    weak = HrDecisionDimension(score=7.5, evidence=["招聘证据过度压缩"])
+    review = HrReviewArtifact(
+        schema_version="1.3",
+        run_id=RUN_ID,
+        created_at=NOW,
+        source_digests=digests(),
+        revision_round=0,
+        recommendation=HrRecommendation.HESITATE,
+        overall_score=7.5,
+        role_fit=weak,
+        narrative_completeness=weak,
+        evidence_specificity=weak,
+        decision_readiness=weak,
+        credibility=weak,
+        experience_reviews=[
+            HrExperienceReview(
+                experience_id="EXP-PROJECT-001",
+                ten_second_impression="事实真实但不足以推进",
+                defects=["缺少完整证据链"],
+                severity_score=8,
+                interview_impact=InterviewImpact.BLOCKING,
+                recommended_bullet_count=3,
+                revision_instructions=["按已确认事实展开"],
+            )
+        ],
+        issue_codes=["NOT_INTERVIEW_READY"],
+        existing_fact_revision_sufficient=True,
+        fact_questions_required=False,
+        reselect_required=False,
+        passed=False,
+        disposition=HrReviewDisposition.REVISE,
+    )
+    stage.write_model("audit.json", audit)
+    stage.write_model("hr-review.json", review)
+    packet = input_packet().model_copy(update={"schema_version": "1.3"})
+    manifest = RunManifestArtifact(
+        schema_version="1.3",
+        run_id=RUN_ID,
+        created_at=NOW,
+        source_digests=digests(),
+        state=ContentState.NEEDS_CONTENT_REVIEW,
+        input_packet=packet,
+        artifacts=stage.artifact_records(),
+    )
+    stage.commit(manifest)
+    with pytest.raises(StorageError, match="HR decision gate did not pass"):
+        approve_run(
+            application,
+            RUN_ID,
+            {"FACT-PROJECT-001-01": "已确认事实"},
+            approved_at=NOW,
+        )
+
+
+def test_schema_v13_approval_rejects_mismatched_hr_review_envelope(
+    tmp_path: Path,
+) -> None:
+    application = create_application(tmp_path)
+    stage = begin_run(application, RUN_ID)
+    audit = passed_audit().model_copy(update={"schema_version": "1.3"})
+    mismatched_digests = SourceDigests(
+        jd_sha256="d" * 64,
+        fact_snapshot_sha256=HASH_B,
+        preferences_sha256=HASH_C,
+    )
+    stage.write_model("audit.json", audit)
+    stage.write_model(
+        "hr-review.json", passed_hr_review(source_digests=mismatched_digests)
+    )
+    packet = input_packet().model_copy(update={"schema_version": "1.3"})
+    manifest = RunManifestArtifact(
+        schema_version="1.3",
+        run_id=RUN_ID,
+        created_at=NOW,
+        source_digests=digests(),
+        state=ContentState.NEEDS_CONTENT_REVIEW,
+        input_packet=packet,
+        artifacts=stage.artifact_records(),
+    )
+    stage.commit(manifest)
+    with pytest.raises(RunIntegrityError, match="HR review envelope"):
+        approve_run(
+            application,
+            RUN_ID,
+            {"FACT-PROJECT-001-01": "已确认事实"},
+            approved_at=NOW,
+        )
 
 
 def test_only_referenced_fact_changes_mark_current_stale(tmp_path: Path) -> None:

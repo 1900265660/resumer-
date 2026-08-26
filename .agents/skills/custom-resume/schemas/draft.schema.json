@@ -1,0 +1,262 @@
+{
+  "$defs": {
+    "CandidateSuggestion": {
+      "additionalProperties": false,
+      "properties": {
+        "suggestion_id": {
+          "pattern": "^CAND-[0-9]{3}$",
+          "title": "Suggestion Id",
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "process",
+            "tool",
+            "result",
+            "estimate"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "question": {
+          "minLength": 1,
+          "title": "Question",
+          "type": "string"
+        },
+        "suggested_text": {
+          "minLength": 1,
+          "title": "Suggested Text",
+          "type": "string"
+        },
+        "estimate_range": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Estimate Range"
+        }
+      },
+      "required": [
+        "suggestion_id",
+        "category",
+        "question",
+        "suggested_text"
+      ],
+      "title": "CandidateSuggestion",
+      "type": "object"
+    },
+    "DraftAgent": {
+      "enum": [
+        "writer",
+        "asu_writer"
+      ],
+      "title": "DraftAgent",
+      "type": "string"
+    },
+    "ResumeBullet": {
+      "additionalProperties": false,
+      "properties": {
+        "bullet_id": {
+          "pattern": "^(WRITER|ASU|FUSION)-[0-9]{3}$",
+          "title": "Bullet Id",
+          "type": "string"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "fact_ids": {
+          "items": {
+            "pattern": "^FACT-[A-Z]+-[0-9]{3}-[0-9]{2}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Fact Ids",
+          "type": "array"
+        },
+        "requirement_ids": {
+          "items": {
+            "pattern": "^REQ-[0-9]{3}$",
+            "type": "string"
+          },
+          "title": "Requirement Ids",
+          "type": "array"
+        },
+        "primary_value": {
+          "minLength": 1,
+          "title": "Primary Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "bullet_id",
+        "text",
+        "fact_ids",
+        "primary_value"
+      ],
+      "title": "ResumeBullet",
+      "type": "object"
+    },
+    "ResumeEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "experience_id": {
+          "pattern": "^EXP-[A-Z]+-[0-9]{3}$",
+          "title": "Experience Id",
+          "type": "string"
+        },
+        "heading": {
+          "minLength": 1,
+          "title": "Heading",
+          "type": "string"
+        },
+        "bullets": {
+          "items": {
+            "$ref": "#/$defs/ResumeBullet"
+          },
+          "minItems": 1,
+          "title": "Bullets",
+          "type": "array"
+        }
+      },
+      "required": [
+        "experience_id",
+        "heading",
+        "bullets"
+      ],
+      "title": "ResumeEntry",
+      "type": "object"
+    },
+    "ResumeSection": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/ResumeSectionName"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/ResumeEntry"
+          },
+          "title": "Entries",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ResumeSection",
+      "type": "object"
+    },
+    "ResumeSectionName": {
+      "enum": [
+        "教育经历",
+        "实习/工作经历",
+        "实践经历",
+        "自我能力"
+      ],
+      "title": "ResumeSectionName",
+      "type": "string"
+    },
+    "SourceDigests": {
+      "additionalProperties": false,
+      "properties": {
+        "jd_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Jd Sha256",
+          "type": "string"
+        },
+        "fact_snapshot_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fact Snapshot Sha256",
+          "type": "string"
+        },
+        "preferences_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Preferences Sha256",
+          "type": "string"
+        },
+        "reference_cards_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Cards Sha256"
+        }
+      },
+      "required": [
+        "jd_sha256",
+        "fact_snapshot_sha256",
+        "preferences_sha256"
+      ],
+      "title": "SourceDigests",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": "1.3",
+      "enum": [
+        "1.0",
+        "1.1",
+        "1.2",
+        "1.3"
+      ],
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^cr_[0-9]{8}T[0-9]{6}_[a-z0-9]{6}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "source_digests": {
+      "$ref": "#/$defs/SourceDigests"
+    },
+    "agent": {
+      "$ref": "#/$defs/DraftAgent"
+    },
+    "sections": {
+      "items": {
+        "$ref": "#/$defs/ResumeSection"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "title": "Sections",
+      "type": "array"
+    },
+    "candidate_suggestions": {
+      "items": {
+        "$ref": "#/$defs/CandidateSuggestion"
+      },
+      "title": "Candidate Suggestions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "run_id",
+    "created_at",
+    "source_digests",
+    "agent",
+    "sections"
+  ],
+  "title": "DraftArtifact",
+  "type": "object"
+}

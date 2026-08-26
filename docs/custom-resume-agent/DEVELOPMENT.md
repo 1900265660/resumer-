@@ -1,7 +1,7 @@
 # 定制简历 Agent 开发规范
 
 > 状态：已确认
-> 版本：0.1
+> 版本：0.4
 > 适用范围：`custom-resume` 模块的文档、Skill、子代理、Prompt、验证脚本和测试
 
 ## 1. 标准流程
@@ -79,12 +79,18 @@ Understand → Inspect → Plan → Implement → Test → Review
 - 长 Prompt 存放在 `.agents/prompts/custom-resume/`，不得硬编码进 Python。
 - Prompt 只能要求结构化输出；不得依赖从自然语言报告反向解析状态。
 - Writer、ASu Writer 和 Auditor Prompt 不得互相复制草稿或泄漏预期答案。
+- HR Reviewer 必须是全新只读调用，不得由 Writer、融合器或基础 Auditor 复用上下文自证质量。
+- Schema 1.3 运行只有在 `hr-review.json` 推荐 `strong_push` 且总分、五维均达到 8.5 后才允许内容批准。
+- HR 意见修订后必须重跑确定性校验、基础 Auditor 和全新的 HR Reviewer；缺少事实时只生成问题，不得用行业常识扩写。
 - Prompt 修改必须运行至少一个正向、一个事实缺口和一个对抗用例。
+- 能力迁移 Prompt 必须同时输出源事实、源动作、目标能力、迁移距离和可写边界；禁止只输出无证据的能力标签。
+- “发散能力”和“生成简历事实”必须是两个阶段：合理但未经确认的流程只能进入 `candidate` 问题，不能进入打分或 Writer 输入。
+- 选材 Prompt 必须分别输出岗位匹配与组合价值，不能让 LLM 自行合成最终总分；分项和距离系数由代码复算。
 
 ## 6. Schema 与兼容政策
 
 - 所有 JSON 包含 `schema_version`。
-- V1 Schema 使用 `1.x`；新增可选字段可提升次版本，破坏性修改必须提升主版本并提供迁移策略。
+- V1.4 新产物默认使用 Schema `1.3`；加载器继续只读接受 `1.0`–`1.2` 历史运行，绝不原地迁移或覆盖历史产物。
 - Pydantic 模型是 JSON 结构的代码级来源，`ARCHITECTURE.md` 记录公共语义。
 - 未知字段默认拒绝，避免 LLM 静默发明接口。
 - 状态、枚举和文件名不得仅在 Prompt 中定义。
@@ -99,6 +105,8 @@ python -m compileall .agents/skills/custom-resume/scripts tests/custom_resume
 ```
 
 涉及 Skill 元数据时还需运行 Skill Creator 的 `quick_validate.py`。涉及运行产物时运行 `validate_run.py`。
+
+能力迁移和组合选材变更还必须运行深蓝定向回归，验证“翻译跨方协作/质量/交付被发现”和“未经确认的人员分工不进入正文”同时成立；只验证其中一项不能视为通过。
 
 ### Lint 和类型检查
 
@@ -131,8 +139,10 @@ python -m compileall .agents/skills/custom-resume/scripts tests/custom_resume
 4. Schema、Prompt、文档和运行产物一致；
 5. diff 无无关改动或敏感数据；
 6. 失败和降级行为已验证；
-7. 未验证部分被明确记录；
-8. 输出最终报告并停止，不自动开始下一 Task。
+7. 能力迁移回归同时达到迁移召回 100% 和可写迁移精度 100%；
+8. 教育锁定、能力分类、同类项目上限、工作板块与例外均通过确定性测试；
+9. 未验证部分被明确记录；
+10. 输出最终报告并停止，不自动开始下一 Task。
 
 ## 10. 最终报告格式
 

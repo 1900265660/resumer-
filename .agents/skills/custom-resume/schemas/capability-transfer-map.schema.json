@@ -1,0 +1,278 @@
+{
+  "$defs": {
+    "CapabilityCategory": {
+      "enum": [
+        "planning_delivery",
+        "stakeholder_collaboration",
+        "quality_risk",
+        "user_research",
+        "data_analysis",
+        "content_communication",
+        "product_technology",
+        "operations_business_domain"
+      ],
+      "title": "CapabilityCategory",
+      "type": "string"
+    },
+    "CapabilityCategoryScan": {
+      "additionalProperties": false,
+      "properties": {
+        "experience_id": {
+          "pattern": "^EXP-[A-Z]+-[0-9]{3}$",
+          "title": "Experience Id",
+          "type": "string"
+        },
+        "category": {
+          "$ref": "#/$defs/CapabilityCategory"
+        },
+        "status": {
+          "$ref": "#/$defs/CapabilityStatus"
+        },
+        "transfer_ids": {
+          "items": {
+            "pattern": "^TR-[0-9]{3}$",
+            "type": "string"
+          },
+          "title": "Transfer Ids",
+          "type": "array"
+        },
+        "rationale": {
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "experience_id",
+        "category",
+        "status",
+        "rationale"
+      ],
+      "title": "CapabilityCategoryScan",
+      "type": "object"
+    },
+    "CapabilityStatus": {
+      "enum": [
+        "supported",
+        "candidate",
+        "none"
+      ],
+      "title": "CapabilityStatus",
+      "type": "string"
+    },
+    "CapabilityTransfer": {
+      "additionalProperties": false,
+      "properties": {
+        "transfer_id": {
+          "pattern": "^TR-[0-9]{3}$",
+          "title": "Transfer Id",
+          "type": "string"
+        },
+        "experience_id": {
+          "pattern": "^EXP-[A-Z]+-[0-9]{3}$",
+          "title": "Experience Id",
+          "type": "string"
+        },
+        "category": {
+          "$ref": "#/$defs/CapabilityCategory"
+        },
+        "fact_ids": {
+          "items": {
+            "pattern": "^FACT-[A-Z]+-[0-9]{3}-[0-9]{2}$",
+            "type": "string"
+          },
+          "title": "Fact Ids",
+          "type": "array"
+        },
+        "source_action": {
+          "minLength": 1,
+          "title": "Source Action",
+          "type": "string"
+        },
+        "target_capability": {
+          "minLength": 1,
+          "title": "Target Capability",
+          "type": "string"
+        },
+        "requirement_ids": {
+          "items": {
+            "pattern": "^REQ-[0-9]{3}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Requirement Ids",
+          "type": "array"
+        },
+        "distance": {
+          "$ref": "#/$defs/TransferDistance"
+        },
+        "confidence": {
+          "$ref": "#/$defs/TransferConfidence"
+        },
+        "credit_multiplier": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Credit Multiplier",
+          "type": "number"
+        },
+        "writable_scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Writable Scope"
+        },
+        "candidate_question_id": {
+          "anyOf": [
+            {
+              "pattern": "^Q-[0-9]{3}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Candidate Question Id"
+        }
+      },
+      "required": [
+        "transfer_id",
+        "experience_id",
+        "category",
+        "source_action",
+        "target_capability",
+        "requirement_ids",
+        "distance",
+        "confidence",
+        "credit_multiplier"
+      ],
+      "title": "CapabilityTransfer",
+      "type": "object"
+    },
+    "SourceDigests": {
+      "additionalProperties": false,
+      "properties": {
+        "jd_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Jd Sha256",
+          "type": "string"
+        },
+        "fact_snapshot_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fact Snapshot Sha256",
+          "type": "string"
+        },
+        "preferences_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Preferences Sha256",
+          "type": "string"
+        },
+        "reference_cards_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Cards Sha256"
+        }
+      },
+      "required": [
+        "jd_sha256",
+        "fact_snapshot_sha256",
+        "preferences_sha256"
+      ],
+      "title": "SourceDigests",
+      "type": "object"
+    },
+    "TransferConfidence": {
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "title": "TransferConfidence",
+      "type": "string"
+    },
+    "TransferDistance": {
+      "enum": [
+        "direct",
+        "adjacent",
+        "analogical",
+        "candidate"
+      ],
+      "title": "TransferDistance",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": "1.3",
+      "enum": [
+        "1.0",
+        "1.1",
+        "1.2",
+        "1.3"
+      ],
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^cr_[0-9]{8}T[0-9]{6}_[a-z0-9]{6}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "source_digests": {
+      "$ref": "#/$defs/SourceDigests"
+    },
+    "experience_ids": {
+      "items": {
+        "pattern": "^EXP-[A-Z]+-[0-9]{3}$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Experience Ids",
+      "type": "array"
+    },
+    "transfers": {
+      "items": {
+        "$ref": "#/$defs/CapabilityTransfer"
+      },
+      "title": "Transfers",
+      "type": "array"
+    },
+    "scans": {
+      "items": {
+        "$ref": "#/$defs/CapabilityCategoryScan"
+      },
+      "minItems": 1,
+      "title": "Scans",
+      "type": "array"
+    }
+  },
+  "required": [
+    "run_id",
+    "created_at",
+    "source_digests",
+    "experience_ids",
+    "scans"
+  ],
+  "title": "CapabilityTransferMapArtifact",
+  "type": "object"
+}

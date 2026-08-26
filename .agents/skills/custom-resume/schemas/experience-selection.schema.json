@@ -1,0 +1,470 @@
+{
+  "$defs": {
+    "ExperienceCandidateScore": {
+      "additionalProperties": false,
+      "properties": {
+        "experience_id": {
+          "pattern": "^EXP-[A-Z]+-[0-9]{3}$",
+          "title": "Experience Id",
+          "type": "string"
+        },
+        "fact_ids": {
+          "items": {
+            "pattern": "^FACT-[A-Z]+-[0-9]{3}-[0-9]{2}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Fact Ids",
+          "type": "array"
+        },
+        "responsibility_score": {
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Responsibility Score",
+          "type": "integer"
+        },
+        "process_delivery_score": {
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Process Delivery Score",
+          "type": "integer"
+        },
+        "result_score": {
+          "maximum": 15,
+          "minimum": 0,
+          "title": "Result Score",
+          "type": "integer"
+        },
+        "domain_score": {
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Domain Score",
+          "type": "integer"
+        },
+        "incremental_coverage_score": {
+          "maximum": 15,
+          "minimum": 0,
+          "title": "Incremental Coverage Score",
+          "type": "integer"
+        },
+        "evidence_strength_score": {
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Evidence Strength Score",
+          "type": "integer"
+        },
+        "job_task_evidence": {
+          "$ref": "#/$defs/JobTaskEvidenceLevel"
+        },
+        "total_score": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Total Score",
+          "type": "integer"
+        },
+        "tier": {
+          "$ref": "#/$defs/ExperienceTier"
+        },
+        "matched_requirement_ids": {
+          "items": {
+            "pattern": "^REQ-[0-9]{3}$",
+            "type": "string"
+          },
+          "title": "Matched Requirement Ids",
+          "type": "array"
+        },
+        "incremental_requirement_ids": {
+          "items": {
+            "pattern": "^REQ-[0-9]{3}$",
+            "type": "string"
+          },
+          "title": "Incremental Requirement Ids",
+          "type": "array"
+        },
+        "selected": {
+          "default": false,
+          "title": "Selected",
+          "type": "boolean"
+        },
+        "proposed_bullet_count": {
+          "default": 0,
+          "maximum": 14,
+          "minimum": 0,
+          "title": "Proposed Bullet Count",
+          "type": "integer"
+        },
+        "rationale": {
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "omission_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Omission Reason"
+        },
+        "user_override_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "User Override Reason"
+        },
+        "capability_transfer_ids": {
+          "items": {
+            "pattern": "^TR-[0-9]{3}$",
+            "type": "string"
+          },
+          "title": "Capability Transfer Ids",
+          "type": "array"
+        },
+        "transfer_score_credits": {
+          "items": {
+            "$ref": "#/$defs/TransferScoreCredit"
+          },
+          "title": "Transfer Score Credits",
+          "type": "array"
+        },
+        "portfolio_value_score": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PortfolioValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "similarity_group": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Similarity Group"
+        },
+        "is_personal_development": {
+          "default": false,
+          "title": "Is Personal Development",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "experience_id",
+        "fact_ids",
+        "responsibility_score",
+        "process_delivery_score",
+        "result_score",
+        "domain_score",
+        "incremental_coverage_score",
+        "evidence_strength_score",
+        "job_task_evidence",
+        "total_score",
+        "tier",
+        "rationale"
+      ],
+      "title": "ExperienceCandidateScore",
+      "type": "object"
+    },
+    "ExperienceTier": {
+      "enum": [
+        "core",
+        "auxiliary",
+        "excluded"
+      ],
+      "title": "ExperienceTier",
+      "type": "string"
+    },
+    "JobTaskEvidenceLevel": {
+      "enum": [
+        "direct",
+        "transferable",
+        "affinity_only",
+        "none"
+      ],
+      "title": "JobTaskEvidenceLevel",
+      "type": "string"
+    },
+    "PortfolioValue": {
+      "additionalProperties": false,
+      "properties": {
+        "section_balance": {
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Section Balance",
+          "type": "integer"
+        },
+        "capability_diversity": {
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Capability Diversity",
+          "type": "integer"
+        },
+        "narrative_uniqueness": {
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Narrative Uniqueness",
+          "type": "integer"
+        },
+        "non_redundancy": {
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Non Redundancy",
+          "type": "integer"
+        },
+        "total": {
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "section_balance",
+        "capability_diversity",
+        "narrative_uniqueness",
+        "non_redundancy",
+        "total"
+      ],
+      "title": "PortfolioValue",
+      "type": "object"
+    },
+    "ScoreComponent": {
+      "enum": [
+        "responsibility",
+        "process_delivery",
+        "result",
+        "domain",
+        "incremental_coverage",
+        "evidence_strength"
+      ],
+      "title": "ScoreComponent",
+      "type": "string"
+    },
+    "SectionBalanceOverride": {
+      "additionalProperties": false,
+      "properties": {
+        "experience_id": {
+          "pattern": "^EXP-[A-Z]+-[0-9]{3}$",
+          "title": "Experience Id",
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "compared_alternative_ids": {
+          "items": {
+            "pattern": "^EXP-[A-Z]+-[0-9]{3}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Compared Alternative Ids",
+          "type": "array"
+        },
+        "approved_at": {
+          "format": "date-time",
+          "title": "Approved At",
+          "type": "string"
+        },
+        "max_bullets": {
+          "const": 2,
+          "default": 2,
+          "title": "Max Bullets",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "experience_id",
+        "reason",
+        "compared_alternative_ids",
+        "approved_at"
+      ],
+      "title": "SectionBalanceOverride",
+      "type": "object"
+    },
+    "SourceDigests": {
+      "additionalProperties": false,
+      "properties": {
+        "jd_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Jd Sha256",
+          "type": "string"
+        },
+        "fact_snapshot_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fact Snapshot Sha256",
+          "type": "string"
+        },
+        "preferences_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Preferences Sha256",
+          "type": "string"
+        },
+        "reference_cards_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Cards Sha256"
+        }
+      },
+      "required": [
+        "jd_sha256",
+        "fact_snapshot_sha256",
+        "preferences_sha256"
+      ],
+      "title": "SourceDigests",
+      "type": "object"
+    },
+    "TransferScoreCredit": {
+      "additionalProperties": false,
+      "properties": {
+        "transfer_id": {
+          "pattern": "^TR-[0-9]{3}$",
+          "title": "Transfer Id",
+          "type": "string"
+        },
+        "component": {
+          "$ref": "#/$defs/ScoreComponent"
+        },
+        "base_points": {
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Base Points",
+          "type": "integer"
+        },
+        "credited_points": {
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Credited Points",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "transfer_id",
+        "component",
+        "base_points",
+        "credited_points"
+      ],
+      "title": "TransferScoreCredit",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": "1.3",
+      "enum": [
+        "1.0",
+        "1.1",
+        "1.2",
+        "1.3"
+      ],
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^cr_[0-9]{8}T[0-9]{6}_[a-z0-9]{6}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "source_digests": {
+      "$ref": "#/$defs/SourceDigests"
+    },
+    "candidates": {
+      "items": {
+        "$ref": "#/$defs/ExperienceCandidateScore"
+      },
+      "minItems": 1,
+      "title": "Candidates",
+      "type": "array"
+    },
+    "capability_transfer_map_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Capability Transfer Map Sha256"
+    },
+    "section_balance_override": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SectionBalanceOverride"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "honest_weak_draft": {
+      "default": false,
+      "title": "Honest Weak Draft",
+      "type": "boolean"
+    },
+    "selection_approved": {
+      "default": false,
+      "title": "Selection Approved",
+      "type": "boolean"
+    },
+    "approved_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Approved At"
+    }
+  },
+  "required": [
+    "run_id",
+    "created_at",
+    "source_digests",
+    "candidates"
+  ],
+  "title": "ExperienceSelectionArtifact",
+  "type": "object"
+}

@@ -1,6 +1,6 @@
 interface:
   display_name: "定制简历内容"
-  short_description: "按单个 AI 产品或游戏研发 PM JD 定制可审计的中文简历内容"
+  short_description: "按单个产品 PM JD 完成可审计选材、双稿融合和内容验收"
   default_prompt: "Use $custom-resume to tailor evidence-grounded Chinese resume content for one supported product-manager JD."
 policy:
   allow_implicit_invocation: true

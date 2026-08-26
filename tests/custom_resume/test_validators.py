@@ -12,12 +12,17 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 from fact_library import ExperienceRecord, FactRecord, parse_fact_records  # noqa: E402
 from models import (  # noqa: E402
     CandidateSuggestion,
+    ExperienceCandidateScore,
+    ExperienceSelectionArtifact,
+    ExperienceTier,
     FusionAction,
     FusionArtifact,
     FusionDecision,
     JDAnalysisArtifact,
     JobRequirement,
+    JobTaskEvidenceLevel,
     RequirementPriority,
+    PortfolioValue,
     ResumeBullet,
     ResumeEntry,
     ResumeSection,
@@ -49,6 +54,7 @@ def digests() -> SourceDigests:
 
 def jd_analysis() -> JDAnalysisArtifact:
     return JDAnalysisArtifact(
+        schema_version="1.1",
         run_id=RUN_ID,
         created_at=NOW,
         source_digests=digests(),
@@ -92,6 +98,37 @@ def experience_record() -> ExperienceRecord:
     )
 
 
+def approved_selection() -> ExperienceSelectionArtifact:
+    return ExperienceSelectionArtifact(
+        schema_version="1.1",
+        run_id=RUN_ID,
+        created_at=NOW,
+        source_digests=digests(),
+        candidates=[
+            ExperienceCandidateScore(
+                experience_id=EXP_ID,
+                fact_ids=[FACT_ID],
+                responsibility_score=25,
+                process_delivery_score=18,
+                result_score=12,
+                domain_score=6,
+                incremental_coverage_score=12,
+                evidence_strength_score=8,
+                job_task_evidence=JobTaskEvidenceLevel.DIRECT,
+                total_score=81,
+                tier=ExperienceTier.CORE,
+                matched_requirement_ids=["REQ-001"],
+                incremental_requirement_ids=["REQ-001"],
+                selected=True,
+                proposed_bullet_count=1,
+                rationale="直接支持 AI 产品评测。",
+            )
+        ],
+        selection_approved=True,
+        approved_at=NOW,
+    )
+
+
 def fusion(
     text: str = "完成三轮评测，准确率提升至 88%。",
     fact_id: str = FACT_ID,
@@ -105,6 +142,7 @@ def fusion(
         primary_value="AI 产品评测",
     )
     return FusionArtifact(
+        schema_version="1.1",
         run_id=RUN_ID,
         created_at=NOW,
         source_digests=digests(),
@@ -148,7 +186,160 @@ def test_real_fact_library_parses_all_migrated_ids() -> None:
         return
     experiences, facts = parse_fact_records(source.read_text(encoding="utf-8"))
     assert len(experiences) == 26
-    assert len(facts) == 74
+    assert len(facts) == 75
+
+
+def test_v12_education_is_exact_and_ability_categories_are_fixed() -> None:
+    education = fact_record(
+        "FACT-EDU-001-01",
+        "EXP-EDU-001",
+        "测试大学，汉语言文学，本科，2022/09–2026/06。",
+    )
+    skill_facts = [
+        fact_record(f"FACT-SKILL-001-{index:02d}", "EXP-SKILL-001", value)
+        for index, value in enumerate(
+            ("熟悉 RAG。", "具备跨方沟通能力。", "熟悉游戏体验分析。", "英语可用于工作沟通。"),
+            start=1,
+        )
+    ]
+    all_facts = {education.fact_id: education, FACT_ID: fact_record()}
+    all_facts.update({item.fact_id: item for item in skill_facts})
+    experiences = {
+        "EXP-EDU-001": ExperienceRecord(
+            experience_id="EXP-EDU-001",
+            category="EDU",
+            heading="测试大学｜汉语言文学｜2022/09–2026/06",
+            immutable_tokens=("测试大学", "汉语言文学", "2022/09–2026/06"),
+            facts=(education,),
+        ),
+        EXP_ID: experience_record(),
+        "EXP-SKILL-001": ExperienceRecord(
+            experience_id="EXP-SKILL-001",
+            category="SKILL",
+            heading="自我能力",
+            immutable_tokens=(),
+            facts=tuple(skill_facts),
+        ),
+    }
+
+    def build(education_text: str) -> FusionArtifact:
+        specifications = [
+            ("EXP-EDU-001", "测试大学｜汉语言文学｜2022/09–2026/06", education.fact_id, education_text, []),
+            (EXP_ID, "测试公司｜产品负责人｜2025/04–2025/06", FACT_ID, fact_record().value, ["REQ-001"]),
+            *[
+                ("EXP-SKILL-001", heading, fact.fact_id, fact.value, [])
+                for heading, fact in zip(
+                    ("专业硬技能", "综合软技能", "游戏体验", "语言能力"),
+                    skill_facts,
+                    strict=True,
+                )
+            ],
+        ]
+        bullets = []
+        decisions = []
+        for index, (_, _, fact_id, text, requirement_ids) in enumerate(specifications, start=1):
+            bullet = ResumeBullet(
+                bullet_id=f"FUSION-{index:03d}",
+                text=text,
+                fact_ids=[fact_id],
+                requirement_ids=requirement_ids,
+                primary_value="固定基线",
+            )
+            bullets.append(bullet)
+            decisions.append(
+                FusionDecision(
+                    decision_id=f"DEC-{index:03d}",
+                    action=FusionAction.SELECT_WRITER,
+                    source_bullet_ids=[f"WRITER-{index:03d}"],
+                    output_bullet_id=bullet.bullet_id,
+                    output_text=text,
+                    fact_ids=[fact_id],
+                    requirement_ids=requirement_ids,
+                    rationale="保持事实与固定结构",
+                )
+            )
+        return FusionArtifact(
+            schema_version="1.2",
+            run_id=RUN_ID,
+            created_at=NOW,
+            source_digests=digests(),
+            sections=[
+                ResumeSection(
+                    name=ResumeSectionName.EDUCATION,
+                    entries=[
+                        ResumeEntry(
+                            experience_id=specifications[0][0],
+                            heading=specifications[0][1],
+                            bullets=[bullets[0]],
+                        )
+                    ],
+                ),
+                ResumeSection(name=ResumeSectionName.WORK),
+                ResumeSection(
+                    name=ResumeSectionName.PRACTICE,
+                    entries=[
+                        ResumeEntry(
+                            experience_id=EXP_ID,
+                            heading=specifications[1][1],
+                            bullets=[bullets[1]],
+                        )
+                    ],
+                ),
+                ResumeSection(
+                    name=ResumeSectionName.ABILITIES,
+                    entries=[
+                        ResumeEntry(
+                            experience_id="EXP-SKILL-001",
+                            heading=specifications[index][1],
+                            bullets=[bullets[index]],
+                        )
+                        for index in range(2, 6)
+                    ],
+                ),
+            ],
+            decisions=decisions,
+        )
+
+    selected = ExperienceCandidateScore.model_validate(
+        {
+            **approved_selection().candidates[0].model_dump(mode="python"),
+            "portfolio_value_score": PortfolioValue(
+                section_balance=2,
+                capability_diversity=4,
+                narrative_uniqueness=4,
+                non_redundancy=4,
+                total=14,
+            ).model_dump(mode="python"),
+            "similarity_group": "个人AI产品Demo",
+            "is_personal_development": True,
+        }
+    )
+    v12_selection = ExperienceSelectionArtifact(
+        schema_version="1.2",
+        run_id=RUN_ID,
+        created_at=NOW,
+        source_digests=digests(),
+        capability_transfer_map_sha256="d" * 64,
+        candidates=[selected],
+        selection_approved=True,
+        approved_at=NOW,
+    )
+    valid = validate_fusion_content(
+        build(education.value),
+        jd_analysis(),
+        experiences,
+        all_facts,
+        experience_selection=v12_selection,
+    )
+    assert valid.passed is True
+    changed = validate_fusion_content(
+        build("测试大学，汉语言文学，本科。"),
+        jd_analysis(),
+        experiences,
+        all_facts,
+        experience_selection=v12_selection,
+    )
+    assert "EDUCATION_BASELINE_CHANGED" in finding_codes(changed)
 
 
 def test_chinese_and_arabic_numeric_claims_are_normalized() -> None:
@@ -157,7 +348,7 @@ def test_chinese_and_arabic_numeric_claims_are_normalized() -> None:
     )
 
 
-def test_valid_content_passes_hard_gates_with_soft_budget_warnings() -> None:
+def test_valid_short_content_passes_without_padding_warnings() -> None:
     experience = experience_record()
     fact = fact_record()
     report = validate_fusion_content(
@@ -165,13 +356,10 @@ def test_valid_content_passes_hard_gates_with_soft_budget_warnings() -> None:
         jd_analysis(),
         {EXP_ID: experience},
         {FACT_ID: fact},
+        experience_selection=approved_selection(),
     )
     assert report.passed is True
-    assert finding_codes(report) == {
-        "CONTENT_DENSITY_BUDGET",
-        "EXPERIENCE_BULLET_BUDGET",
-    }
-    assert all(item.severity is Severity.WARNING for item in report.findings)
+    assert finding_codes(report) == set()
 
 
 def test_unknown_cross_experience_and_changed_heading_are_hard_failures() -> None:

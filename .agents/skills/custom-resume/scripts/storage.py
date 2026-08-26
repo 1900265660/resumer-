@@ -18,6 +18,7 @@ from models import (
     AuditDisposition,
     ContentState,
     CurrentPointer,
+    HrReviewArtifact,
     ReferencedFactDigest,
     ResumeContentSummary,
     RunCheckpointArtifact,
@@ -303,13 +304,56 @@ def approve_run(
         ContentState.APPROVED,
     }:
         raise StorageError("only a review-ready run can become current")
+    artifact_paths = {item.relative_path for item in manifest.artifacts}
+    if "audit.json" not in artifact_paths:
+        raise RunIntegrityError("approved run manifest does not inventory audit.json")
     audit_path = application_dir / "resume-content" / "runs" / run_id / "audit.json"
     try:
         audit = AuditArtifact.model_validate(_read_json(audit_path))
     except ValidationError as error:
         raise RunIntegrityError("approved run has an invalid audit artifact") from error
+    if (
+        audit.run_id != manifest.run_id
+        or audit.schema_version != manifest.schema_version
+        or audit.source_digests != manifest.source_digests
+    ):
+        raise RunIntegrityError("approved run audit envelope does not match run.json")
+    if len(audit.revisions) != manifest.revision_count:
+        raise RunIntegrityError("approved run audit revision count does not match run.json")
     if audit.disposition is not AuditDisposition.PASSED:
         raise StorageError("run audit did not pass")
+    if manifest.schema_version == "1.3":
+        if "hr-review.json" not in artifact_paths:
+            raise RunIntegrityError(
+                "schema 1.3 run manifest does not inventory hr-review.json"
+            )
+        hr_review_path = (
+            application_dir
+            / "resume-content"
+            / "runs"
+            / run_id
+            / "hr-review.json"
+        )
+        try:
+            hr_review = HrReviewArtifact.model_validate(_read_json(hr_review_path))
+        except (ValidationError, OSError, json.JSONDecodeError) as error:
+            raise RunIntegrityError(
+                "schema 1.3 approval requires a valid HR review artifact"
+            ) from error
+        if (
+            hr_review.run_id != manifest.run_id
+            or hr_review.schema_version != manifest.schema_version
+            or hr_review.source_digests != manifest.source_digests
+        ):
+            raise RunIntegrityError(
+                "schema 1.3 HR review envelope does not match run.json"
+            )
+        if hr_review.revision_round != manifest.revision_count:
+            raise RunIntegrityError(
+                "schema 1.3 HR review revision round does not match run.json"
+            )
+        if not hr_review.passed:
+            raise StorageError("run HR decision gate did not pass")
     timestamp = approved_at or utc_now()
     if timestamp.tzinfo is None or timestamp.utcoffset() is None:
         raise StorageError("approval timestamp must include a timezone")

@@ -1,0 +1,1860 @@
+{
+  "$defs": {
+    "CapabilityCategory": {
+      "enum": [
+        "planning_delivery",
+        "stakeholder_collaboration",
+        "quality_risk",
+        "user_research",
+        "data_analysis",
+        "content_communication",
+        "product_technology",
+        "operations_business_domain"
+      ],
+      "title": "CapabilityCategory",
+      "type": "string"
+    },
+    "CapabilityCategoryScan": {
+      "additionalProperties": false,
+      "properties": {
+        "experience_id": {
+          "pattern": "^EXP-[A-Z]+-[0-9]{3}$",
+          "title": "Experience Id",
+          "type": "string"
+        },
+        "category": {
+          "$ref": "#/$defs/CapabilityCategory"
+        },
+        "status": {
+          "$ref": "#/$defs/CapabilityStatus"
+        },
+        "transfer_ids": {
+          "items": {
+            "pattern": "^TR-[0-9]{3}$",
+            "type": "string"
+          },
+          "title": "Transfer Ids",
+          "type": "array"
+        },
+        "rationale": {
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "experience_id",
+        "category",
+        "status",
+        "rationale"
+      ],
+      "title": "CapabilityCategoryScan",
+      "type": "object"
+    },
+    "CapabilityStatus": {
+      "enum": [
+        "supported",
+        "candidate",
+        "none"
+      ],
+      "title": "CapabilityStatus",
+      "type": "string"
+    },
+    "CapabilityTransfer": {
+      "additionalProperties": false,
+      "properties": {
+        "transfer_id": {
+          "pattern": "^TR-[0-9]{3}$",
+          "title": "Transfer Id",
+          "type": "string"
+        },
+        "experience_id": {
+          "pattern": "^EXP-[A-Z]+-[0-9]{3}$",
+          "title": "Experience Id",
+          "type": "string"
+        },
+        "category": {
+          "$ref": "#/$defs/CapabilityCategory"
+        },
+        "fact_ids": {
+          "items": {
+            "pattern": "^FACT-[A-Z]+-[0-9]{3}-[0-9]{2}$",
+            "type": "string"
+          },
+          "title": "Fact Ids",
+          "type": "array"
+        },
+        "source_action": {
+          "minLength": 1,
+          "title": "Source Action",
+          "type": "string"
+        },
+        "target_capability": {
+          "minLength": 1,
+          "title": "Target Capability",
+          "type": "string"
+        },
+        "requirement_ids": {
+          "items": {
+            "pattern": "^REQ-[0-9]{3}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Requirement Ids",
+          "type": "array"
+        },
+        "distance": {
+          "$ref": "#/$defs/TransferDistance"
+        },
+        "confidence": {
+          "$ref": "#/$defs/TransferConfidence"
+        },
+        "credit_multiplier": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Credit Multiplier",
+          "type": "number"
+        },
+        "writable_scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Writable Scope"
+        },
+        "candidate_question_id": {
+          "anyOf": [
+            {
+              "pattern": "^Q-[0-9]{3}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Candidate Question Id"
+        }
+      },
+      "required": [
+        "transfer_id",
+        "experience_id",
+        "category",
+        "source_action",
+        "target_capability",
+        "requirement_ids",
+        "distance",
+        "confidence",
+        "credit_multiplier"
+      ],
+      "title": "CapabilityTransfer",
+      "type": "object"
+    },
+    "CapabilityTransferMapArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "default": "1.3",
+          "enum": [
+            "1.0",
+            "1.1",
+            "1.2",
+            "1.3"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "run_id": {
+          "pattern": "^cr_[0-9]{8}T[0-9]{6}_[a-z0-9]{6}$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "source_digests": {
+          "$ref": "#/$defs/SourceDigests"
+        },
+        "experience_ids": {
+          "items": {
+            "pattern": "^EXP-[A-Z]+-[0-9]{3}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Experience Ids",
+          "type": "array"
+        },
+        "transfers": {
+          "items": {
+            "$ref": "#/$defs/CapabilityTransfer"
+          },
+          "title": "Transfers",
+          "type": "array"
+        },
+        "scans": {
+          "items": {
+            "$ref": "#/$defs/CapabilityCategoryScan"
+          },
+          "minItems": 1,
+          "title": "Scans",
+          "type": "array"
+        }
+      },
+      "required": [
+        "run_id",
+        "created_at",
+        "source_digests",
+        "experience_ids",
+        "scans"
+      ],
+      "title": "CapabilityTransferMapArtifact",
+      "type": "object"
+    },
+    "ConfirmationStatus": {
+      "enum": [
+        "pending",
+        "approved",
+        "rejected"
+      ],
+      "title": "ConfirmationStatus",
+      "type": "string"
+    },
+    "ContentState": {
+      "enum": [
+        "not_started",
+        "analyzing",
+        "needs_input",
+        "awaiting_reference_approval",
+        "awaiting_selection_approval",
+        "drafting",
+        "auditing",
+        "hr_reviewing",
+        "needs_content_review",
+        "approved",
+        "failed",
+        "stale"
+      ],
+      "title": "ContentState",
+      "type": "string"
+    },
+    "CoverageLevel": {
+      "enum": [
+        "direct",
+        "composite",
+        "accepted_estimate",
+        "candidate",
+        "unsupported"
+      ],
+      "title": "CoverageLevel",
+      "type": "string"
+    },
+    "DiffAction": {
+      "enum": [
+        "add",
+        "replace"
+      ],
+      "title": "DiffAction",
+      "type": "string"
+    },
+    "EvidenceMapArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "default": "1.3",
+          "enum": [
+            "1.0",
+            "1.1",
+            "1.2",
+            "1.3"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "run_id": {
+          "pattern": "^cr_[0-9]{8}T[0-9]{6}_[a-z0-9]{6}$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "source_digests": {
+          "$ref": "#/$defs/SourceDigests"
+        },
+        "mappings": {
+          "items": {
+            "$ref": "#/$defs/EvidenceMapping"
+          },
+          "minItems": 1,
+          "title": "Mappings",
+          "type": "array"
+        },
+        "selection_approved": {
+          "default": false,
+          "title": "Selection Approved",
+          "type": "boolean"
+        },
+        "approved_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Approved At"
+        }
+      },
+      "required": [
+        "run_id",
+        "created_at",
+        "source_digests",
+        "mappings"
+      ],
+      "title": "EvidenceMapArtifact",
+      "type": "object"
+    },
+    "EvidenceMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "requirement_id": {
+          "pattern": "^REQ-[0-9]{3}$",
+          "title": "Requirement Id",
+          "type": "string"
+        },
+        "coverage": {
+          "$ref": "#/$defs/CoverageLevel"
+        },
+        "fact_ids": {
+          "items": {
+            "pattern": "^FACT-[A-Z]+-[0-9]{3}-[0-9]{2}$",
+            "type": "string"
+          },
+          "title": "Fact Ids",
+          "type": "array"
+        },
+        "selected": {
+          "default": false,
+          "title": "Selected",
+          "type": "boolean"
+        },
+        "rationale": {
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "gap_summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gap Summary"
+        }
+      },
+      "required": [
+        "requirement_id",
+        "coverage",
+        "rationale"
+      ],
+      "title": "EvidenceMapping",
+      "type": "object"
+    },
+    "ExecutionMode": {
+      "enum": [
+        "blind_dual",
+        "single_agent_degraded"
+      ],
+      "title": "ExecutionMode",
+      "type": "string"
+    },
+    "ExperienceCandidateScore": {
+      "additionalProperties": false,
+      "properties": {
+        "experience_id": {
+          "pattern": "^EXP-[A-Z]+-[0-9]{3}$",
+          "title": "Experience Id",
+          "type": "string"
+        },
+        "fact_ids": {
+          "items": {
+            "pattern": "^FACT-[A-Z]+-[0-9]{3}-[0-9]{2}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Fact Ids",
+          "type": "array"
+        },
+        "responsibility_score": {
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Responsibility Score",
+          "type": "integer"
+        },
+        "process_delivery_score": {
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Process Delivery Score",
+          "type": "integer"
+        },
+        "result_score": {
+          "maximum": 15,
+          "minimum": 0,
+          "title": "Result Score",
+          "type": "integer"
+        },
+        "domain_score": {
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Domain Score",
+          "type": "integer"
+        },
+        "incremental_coverage_score": {
+          "maximum": 15,
+          "minimum": 0,
+          "title": "Incremental Coverage Score",
+          "type": "integer"
+        },
+        "evidence_strength_score": {
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Evidence Strength Score",
+          "type": "integer"
+        },
+        "job_task_evidence": {
+          "$ref": "#/$defs/JobTaskEvidenceLevel"
+        },
+        "total_score": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Total Score",
+          "type": "integer"
+        },
+        "tier": {
+          "$ref": "#/$defs/ExperienceTier"
+        },
+        "matched_requirement_ids": {
+          "items": {
+            "pattern": "^REQ-[0-9]{3}$",
+            "type": "string"
+          },
+          "title": "Matched Requirement Ids",
+          "type": "array"
+        },
+        "incremental_requirement_ids": {
+          "items": {
+            "pattern": "^REQ-[0-9]{3}$",
+            "type": "string"
+          },
+          "title": "Incremental Requirement Ids",
+          "type": "array"
+        },
+        "selected": {
+          "default": false,
+          "title": "Selected",
+          "type": "boolean"
+        },
+        "proposed_bullet_count": {
+          "default": 0,
+          "maximum": 14,
+          "minimum": 0,
+          "title": "Proposed Bullet Count",
+          "type": "integer"
+        },
+        "rationale": {
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "omission_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Omission Reason"
+        },
+        "user_override_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "User Override Reason"
+        },
+        "capability_transfer_ids": {
+          "items": {
+            "pattern": "^TR-[0-9]{3}$",
+            "type": "string"
+          },
+          "title": "Capability Transfer Ids",
+          "type": "array"
+        },
+        "transfer_score_credits": {
+          "items": {
+            "$ref": "#/$defs/TransferScoreCredit"
+          },
+          "title": "Transfer Score Credits",
+          "type": "array"
+        },
+        "portfolio_value_score": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PortfolioValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "similarity_group": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Similarity Group"
+        },
+        "is_personal_development": {
+          "default": false,
+          "title": "Is Personal Development",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "experience_id",
+        "fact_ids",
+        "responsibility_score",
+        "process_delivery_score",
+        "result_score",
+        "domain_score",
+        "incremental_coverage_score",
+        "evidence_strength_score",
+        "job_task_evidence",
+        "total_score",
+        "tier",
+        "rationale"
+      ],
+      "title": "ExperienceCandidateScore",
+      "type": "object"
+    },
+    "ExperienceSelectionArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "default": "1.3",
+          "enum": [
+            "1.0",
+            "1.1",
+            "1.2",
+            "1.3"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "run_id": {
+          "pattern": "^cr_[0-9]{8}T[0-9]{6}_[a-z0-9]{6}$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "source_digests": {
+          "$ref": "#/$defs/SourceDigests"
+        },
+        "candidates": {
+          "items": {
+            "$ref": "#/$defs/ExperienceCandidateScore"
+          },
+          "minItems": 1,
+          "title": "Candidates",
+          "type": "array"
+        },
+        "capability_transfer_map_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Capability Transfer Map Sha256"
+        },
+        "section_balance_override": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SectionBalanceOverride"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "honest_weak_draft": {
+          "default": false,
+          "title": "Honest Weak Draft",
+          "type": "boolean"
+        },
+        "selection_approved": {
+          "default": false,
+          "title": "Selection Approved",
+          "type": "boolean"
+        },
+        "approved_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Approved At"
+        }
+      },
+      "required": [
+        "run_id",
+        "created_at",
+        "source_digests",
+        "candidates"
+      ],
+      "title": "ExperienceSelectionArtifact",
+      "type": "object"
+    },
+    "ExperienceTier": {
+      "enum": [
+        "core",
+        "auxiliary",
+        "excluded"
+      ],
+      "title": "ExperienceTier",
+      "type": "string"
+    },
+    "FactDiffArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "default": "1.3",
+          "enum": [
+            "1.0",
+            "1.1",
+            "1.2",
+            "1.3"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "run_id": {
+          "pattern": "^cr_[0-9]{8}T[0-9]{6}_[a-z0-9]{6}$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "source_digests": {
+          "$ref": "#/$defs/SourceDigests"
+        },
+        "source_fact_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Fact Sha256",
+          "type": "string"
+        },
+        "result_fact_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result Fact Sha256"
+        },
+        "confirmation_status": {
+          "$ref": "#/$defs/ConfirmationStatus",
+          "default": "pending"
+        },
+        "questions": {
+          "items": {
+            "$ref": "#/$defs/FactGapQuestion"
+          },
+          "maxItems": 5,
+          "title": "Questions",
+          "type": "array"
+        },
+        "operations": {
+          "items": {
+            "$ref": "#/$defs/FactDiffOperation"
+          },
+          "title": "Operations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "run_id",
+        "created_at",
+        "source_digests",
+        "source_fact_sha256"
+      ],
+      "title": "FactDiffArtifact",
+      "type": "object"
+    },
+    "FactDiffOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "operation_id": {
+          "pattern": "^FD-[0-9]{3}$",
+          "title": "Operation Id",
+          "type": "string"
+        },
+        "action": {
+          "$ref": "#/$defs/DiffAction"
+        },
+        "experience_id": {
+          "pattern": "^EXP-[A-Z]+-[0-9]{3}$",
+          "title": "Experience Id",
+          "type": "string"
+        },
+        "target_fact_id": {
+          "anyOf": [
+            {
+              "pattern": "^FACT-[A-Z]+-[0-9]{3}-[0-9]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Fact Id"
+        },
+        "proposed_fact_id": {
+          "anyOf": [
+            {
+              "pattern": "^FACT-[A-Z]+-[0-9]{3}-[0-9]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Proposed Fact Id"
+        },
+        "old_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Old Value"
+        },
+        "new_value": {
+          "minLength": 1,
+          "title": "New Value",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/FactProvenance"
+        },
+        "estimate_basis": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Estimate Basis"
+        },
+        "confirmation_status": {
+          "$ref": "#/$defs/ConfirmationStatus",
+          "default": "pending"
+        },
+        "confirmed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confirmed At"
+        }
+      },
+      "required": [
+        "operation_id",
+        "action",
+        "experience_id",
+        "new_value",
+        "provenance"
+      ],
+      "title": "FactDiffOperation",
+      "type": "object"
+    },
+    "FactGapQuestion": {
+      "additionalProperties": false,
+      "properties": {
+        "question_id": {
+          "pattern": "^Q-[0-9]{3}$",
+          "title": "Question Id",
+          "type": "string"
+        },
+        "requirement_ids": {
+          "items": {
+            "pattern": "^REQ-[0-9]{3}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Requirement Ids",
+          "type": "array"
+        },
+        "prompt": {
+          "minLength": 1,
+          "title": "Prompt",
+          "type": "string"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/FactQuestionOption"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Options",
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/QuestionStatus",
+          "default": "unanswered"
+        },
+        "selected_option_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z]$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selected Option Id"
+        },
+        "answer_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Answer Text"
+        }
+      },
+      "required": [
+        "question_id",
+        "requirement_ids",
+        "prompt",
+        "options"
+      ],
+      "title": "FactGapQuestion",
+      "type": "object"
+    },
+    "FactProvenance": {
+      "enum": [
+        "observed",
+        "accepted_estimate"
+      ],
+      "title": "FactProvenance",
+      "type": "string"
+    },
+    "FactQuestionOption": {
+      "additionalProperties": false,
+      "properties": {
+        "option_id": {
+          "pattern": "^[A-Z]$",
+          "title": "Option Id",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "description": {
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "option_id",
+        "label",
+        "description"
+      ],
+      "title": "FactQuestionOption",
+      "type": "object"
+    },
+    "IdealEvidenceItem": {
+      "additionalProperties": false,
+      "properties": {
+        "requirement_id": {
+          "pattern": "^REQ-[0-9]{3}$",
+          "title": "Requirement Id",
+          "type": "string"
+        },
+        "evidence_description": {
+          "minLength": 1,
+          "title": "Evidence Description",
+          "type": "string"
+        },
+        "candidate_specific": {
+          "const": false,
+          "default": false,
+          "title": "Candidate Specific",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "requirement_id",
+        "evidence_description"
+      ],
+      "title": "IdealEvidenceItem",
+      "type": "object"
+    },
+    "JDAnalysisArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "default": "1.3",
+          "enum": [
+            "1.0",
+            "1.1",
+            "1.2",
+            "1.3"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "run_id": {
+          "pattern": "^cr_[0-9]{8}T[0-9]{6}_[a-z0-9]{6}$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "source_digests": {
+          "$ref": "#/$defs/SourceDigests"
+        },
+        "role_family": {
+          "$ref": "#/$defs/RoleFamily",
+          "default": "ai_product_manager"
+        },
+        "job_goal": {
+          "minLength": 1,
+          "title": "Job Goal",
+          "type": "string"
+        },
+        "business_problems": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Business Problems",
+          "type": "array"
+        },
+        "requirements": {
+          "items": {
+            "$ref": "#/$defs/JobRequirement"
+          },
+          "minItems": 1,
+          "title": "Requirements",
+          "type": "array"
+        },
+        "ideal_evidence_blueprint": {
+          "items": {
+            "$ref": "#/$defs/IdealEvidenceItem"
+          },
+          "title": "Ideal Evidence Blueprint",
+          "type": "array"
+        },
+        "risks": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Risks",
+          "type": "array"
+        }
+      },
+      "required": [
+        "run_id",
+        "created_at",
+        "source_digests",
+        "job_goal",
+        "business_problems",
+        "requirements"
+      ],
+      "title": "JDAnalysisArtifact",
+      "type": "object"
+    },
+    "JobRequirement": {
+      "additionalProperties": false,
+      "properties": {
+        "requirement_id": {
+          "pattern": "^REQ-[0-9]{3}$",
+          "title": "Requirement Id",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "priority": {
+          "$ref": "#/$defs/RequirementPriority"
+        },
+        "rationale": {
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "keywords": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Keywords",
+          "type": "array"
+        }
+      },
+      "required": [
+        "requirement_id",
+        "title",
+        "description",
+        "priority",
+        "rationale"
+      ],
+      "title": "JobRequirement",
+      "type": "object"
+    },
+    "JobTaskEvidenceLevel": {
+      "enum": [
+        "direct",
+        "transferable",
+        "affinity_only",
+        "none"
+      ],
+      "title": "JobTaskEvidenceLevel",
+      "type": "string"
+    },
+    "NormalizedInputPacket": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "default": "1.3",
+          "enum": [
+            "1.0",
+            "1.1",
+            "1.2",
+            "1.3"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "run_id": {
+          "pattern": "^cr_[0-9]{8}T[0-9]{6}_[a-z0-9]{6}$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "source_digests": {
+          "$ref": "#/$defs/SourceDigests"
+        },
+        "application_dir": {
+          "pattern": "^applications[\\\\/][^\\r\\n]+$",
+          "title": "Application Dir",
+          "type": "string"
+        },
+        "source_type": {
+          "$ref": "#/$defs/SourceType"
+        },
+        "source_locator": {
+          "title": "Source Locator",
+          "type": "string"
+        },
+        "role_family": {
+          "$ref": "#/$defs/RoleFamily",
+          "default": "ai_product_manager"
+        },
+        "approved_requirement_ids": {
+          "items": {
+            "pattern": "^REQ-[0-9]{3}$",
+            "type": "string"
+          },
+          "title": "Approved Requirement Ids",
+          "type": "array"
+        },
+        "approved_fact_ids": {
+          "items": {
+            "pattern": "^FACT-[A-Z]+-[0-9]{3}-[0-9]{2}$",
+            "type": "string"
+          },
+          "title": "Approved Fact Ids",
+          "type": "array"
+        },
+        "approved_experience_ids": {
+          "items": {
+            "pattern": "^EXP-[A-Z]+-[0-9]{3}$",
+            "type": "string"
+          },
+          "title": "Approved Experience Ids",
+          "type": "array"
+        },
+        "approved_transfer_ids": {
+          "items": {
+            "pattern": "^TR-[0-9]{3}$",
+            "type": "string"
+          },
+          "title": "Approved Transfer Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "run_id",
+        "created_at",
+        "source_digests",
+        "application_dir",
+        "source_type",
+        "source_locator"
+      ],
+      "title": "NormalizedInputPacket",
+      "type": "object"
+    },
+    "PortfolioValue": {
+      "additionalProperties": false,
+      "properties": {
+        "section_balance": {
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Section Balance",
+          "type": "integer"
+        },
+        "capability_diversity": {
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Capability Diversity",
+          "type": "integer"
+        },
+        "narrative_uniqueness": {
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Narrative Uniqueness",
+          "type": "integer"
+        },
+        "non_redundancy": {
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Non Redundancy",
+          "type": "integer"
+        },
+        "total": {
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "section_balance",
+        "capability_diversity",
+        "narrative_uniqueness",
+        "non_redundancy",
+        "total"
+      ],
+      "title": "PortfolioValue",
+      "type": "object"
+    },
+    "QuestionStatus": {
+      "enum": [
+        "unanswered",
+        "answered",
+        "skipped"
+      ],
+      "title": "QuestionStatus",
+      "type": "string"
+    },
+    "ReferenceResearchArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "default": "1.3",
+          "enum": [
+            "1.0",
+            "1.1",
+            "1.2",
+            "1.3"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "run_id": {
+          "pattern": "^cr_[0-9]{8}T[0-9]{6}_[a-z0-9]{6}$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "source_digests": {
+          "$ref": "#/$defs/SourceDigests"
+        },
+        "mode": {
+          "$ref": "#/$defs/ReferenceResearchMode"
+        },
+        "local_card_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Local Card Sha256",
+          "type": "string"
+        },
+        "missing_topics": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Missing Topics",
+          "type": "array"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/ReferenceSource"
+          },
+          "title": "Sources",
+          "type": "array"
+        },
+        "sanitized_method_cards": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Sanitized Method Cards",
+          "type": "array"
+        },
+        "selection_rules": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Selection Rules",
+          "type": "array"
+        },
+        "qualified": {
+          "default": false,
+          "title": "Qualified",
+          "type": "boolean"
+        },
+        "degradation_approved_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Degradation Approved At"
+        },
+        "degradation_approval_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Degradation Approval Reason"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "required": [
+        "run_id",
+        "created_at",
+        "source_digests",
+        "mode",
+        "local_card_sha256"
+      ],
+      "title": "ReferenceResearchArtifact",
+      "type": "object"
+    },
+    "ReferenceResearchMode": {
+      "enum": [
+        "local",
+        "supplemented",
+        "degraded"
+      ],
+      "title": "ReferenceResearchMode",
+      "type": "string"
+    },
+    "ReferenceSource": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "pattern": "^https://[^\\s]+$",
+          "title": "Url",
+          "type": "string"
+        },
+        "retrieved_at": {
+          "format": "date-time",
+          "title": "Retrieved At",
+          "type": "string"
+        },
+        "source_type": {
+          "$ref": "#/$defs/ReferenceSourceType",
+          "default": "open_source_method"
+        },
+        "qualified": {
+          "default": false,
+          "title": "Qualified",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "title",
+        "url",
+        "retrieved_at"
+      ],
+      "title": "ReferenceSource",
+      "type": "object"
+    },
+    "ReferenceSourceType": {
+      "enum": [
+        "resume_sample",
+        "official_role",
+        "hiring_guide",
+        "open_source_method"
+      ],
+      "title": "ReferenceSourceType",
+      "type": "string"
+    },
+    "RequirementPriority": {
+      "enum": [
+        "must",
+        "should",
+        "nice_to_have"
+      ],
+      "title": "RequirementPriority",
+      "type": "string"
+    },
+    "RoleFamily": {
+      "enum": [
+        "ai_product_manager",
+        "game_production_pm"
+      ],
+      "title": "RoleFamily",
+      "type": "string"
+    },
+    "ScoreComponent": {
+      "enum": [
+        "responsibility",
+        "process_delivery",
+        "result",
+        "domain",
+        "incremental_coverage",
+        "evidence_strength"
+      ],
+      "title": "ScoreComponent",
+      "type": "string"
+    },
+    "SectionBalanceOverride": {
+      "additionalProperties": false,
+      "properties": {
+        "experience_id": {
+          "pattern": "^EXP-[A-Z]+-[0-9]{3}$",
+          "title": "Experience Id",
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "compared_alternative_ids": {
+          "items": {
+            "pattern": "^EXP-[A-Z]+-[0-9]{3}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Compared Alternative Ids",
+          "type": "array"
+        },
+        "approved_at": {
+          "format": "date-time",
+          "title": "Approved At",
+          "type": "string"
+        },
+        "max_bullets": {
+          "const": 2,
+          "default": 2,
+          "title": "Max Bullets",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "experience_id",
+        "reason",
+        "compared_alternative_ids",
+        "approved_at"
+      ],
+      "title": "SectionBalanceOverride",
+      "type": "object"
+    },
+    "SelectionAuditArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "default": "1.3",
+          "enum": [
+            "1.0",
+            "1.1",
+            "1.2",
+            "1.3"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "run_id": {
+          "pattern": "^cr_[0-9]{8}T[0-9]{6}_[a-z0-9]{6}$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "source_digests": {
+          "$ref": "#/$defs/SourceDigests"
+        },
+        "phase": {
+          "$ref": "#/$defs/SelectionAuditPhase"
+        },
+        "rows": {
+          "items": {
+            "$ref": "#/$defs/SelectionAuditRow"
+          },
+          "minItems": 1,
+          "title": "Rows",
+          "type": "array"
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "reselect_required": {
+          "default": false,
+          "title": "Reselect Required",
+          "type": "boolean"
+        },
+        "issue_codes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Issue Codes",
+          "type": "array"
+        },
+        "recommendations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Recommendations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "run_id",
+        "created_at",
+        "source_digests",
+        "phase",
+        "rows",
+        "passed"
+      ],
+      "title": "SelectionAuditArtifact",
+      "type": "object"
+    },
+    "SelectionAuditPhase": {
+      "enum": [
+        "pre_draft",
+        "post_fusion"
+      ],
+      "title": "SelectionAuditPhase",
+      "type": "string"
+    },
+    "SelectionAuditRow": {
+      "additionalProperties": false,
+      "properties": {
+        "experience_id": {
+          "pattern": "^EXP-[A-Z]+-[0-9]{3}$",
+          "title": "Experience Id",
+          "type": "string"
+        },
+        "verdict": {
+          "$ref": "#/$defs/SelectionAuditVerdict"
+        },
+        "rationale": {
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "experience_id",
+        "verdict",
+        "rationale"
+      ],
+      "title": "SelectionAuditRow",
+      "type": "object"
+    },
+    "SelectionAuditVerdict": {
+      "enum": [
+        "keep",
+        "auxiliary",
+        "drop",
+        "reconsider"
+      ],
+      "title": "SelectionAuditVerdict",
+      "type": "string"
+    },
+    "SelectionRevisionRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "round": {
+          "maximum": 2,
+          "minimum": 1,
+          "title": "Round",
+          "type": "integer"
+        },
+        "prior_selected_experience_ids": {
+          "items": {
+            "pattern": "^EXP-[A-Z]+-[0-9]{3}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Prior Selected Experience Ids",
+          "type": "array"
+        },
+        "issue_codes": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Issue Codes",
+          "type": "array"
+        },
+        "requested_at": {
+          "format": "date-time",
+          "title": "Requested At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "round",
+        "prior_selected_experience_ids",
+        "issue_codes",
+        "requested_at"
+      ],
+      "title": "SelectionRevisionRecord",
+      "type": "object"
+    },
+    "SourceDigests": {
+      "additionalProperties": false,
+      "properties": {
+        "jd_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Jd Sha256",
+          "type": "string"
+        },
+        "fact_snapshot_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fact Snapshot Sha256",
+          "type": "string"
+        },
+        "preferences_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Preferences Sha256",
+          "type": "string"
+        },
+        "reference_cards_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Cards Sha256"
+        }
+      },
+      "required": [
+        "jd_sha256",
+        "fact_snapshot_sha256",
+        "preferences_sha256"
+      ],
+      "title": "SourceDigests",
+      "type": "object"
+    },
+    "SourceType": {
+      "enum": [
+        "directory",
+        "text",
+        "url"
+      ],
+      "title": "SourceType",
+      "type": "string"
+    },
+    "TransferConfidence": {
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "title": "TransferConfidence",
+      "type": "string"
+    },
+    "TransferDistance": {
+      "enum": [
+        "direct",
+        "adjacent",
+        "analogical",
+        "candidate"
+      ],
+      "title": "TransferDistance",
+      "type": "string"
+    },
+    "TransferScoreCredit": {
+      "additionalProperties": false,
+      "properties": {
+        "transfer_id": {
+          "pattern": "^TR-[0-9]{3}$",
+          "title": "Transfer Id",
+          "type": "string"
+        },
+        "component": {
+          "$ref": "#/$defs/ScoreComponent"
+        },
+        "base_points": {
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Base Points",
+          "type": "integer"
+        },
+        "credited_points": {
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Credited Points",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "transfer_id",
+        "component",
+        "base_points",
+        "credited_points"
+      ],
+      "title": "TransferScoreCredit",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": "1.3",
+      "enum": [
+        "1.0",
+        "1.1",
+        "1.2",
+        "1.3"
+      ],
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^cr_[0-9]{8}T[0-9]{6}_[a-z0-9]{6}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "source_digests": {
+      "$ref": "#/$defs/SourceDigests"
+    },
+    "state": {
+      "$ref": "#/$defs/ContentState"
+    },
+    "execution_mode": {
+      "$ref": "#/$defs/ExecutionMode",
+      "default": "blind_dual"
+    },
+    "input_packet": {
+      "$ref": "#/$defs/NormalizedInputPacket"
+    },
+    "reference_research": {
+      "$ref": "#/$defs/ReferenceResearchArtifact"
+    },
+    "jd_analysis": {
+      "$ref": "#/$defs/JDAnalysisArtifact"
+    },
+    "evidence_map": {
+      "$ref": "#/$defs/EvidenceMapArtifact"
+    },
+    "fact_diff": {
+      "$ref": "#/$defs/FactDiffArtifact"
+    },
+    "capability_transfer_map": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CapabilityTransferMapArtifact"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "experience_selection": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ExperienceSelectionArtifact"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "selection_audit": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SelectionAuditArtifact"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "selection_revisions": {
+      "items": {
+        "$ref": "#/$defs/SelectionRevisionRecord"
+      },
+      "maxItems": 2,
+      "title": "Selection Revisions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "run_id",
+    "created_at",
+    "source_digests",
+    "state",
+    "input_packet",
+    "reference_research",
+    "jd_analysis",
+    "evidence_map",
+    "fact_diff"
+  ],
+  "title": "RunCheckpointArtifact",
+  "type": "object"
+}

@@ -1,0 +1,354 @@
+{
+  "$defs": {
+    "ArtifactRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "relative_path": {
+          "minLength": 1,
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "relative_path",
+        "sha256"
+      ],
+      "title": "ArtifactRecord",
+      "type": "object"
+    },
+    "ContentState": {
+      "enum": [
+        "not_started",
+        "analyzing",
+        "needs_input",
+        "awaiting_reference_approval",
+        "awaiting_selection_approval",
+        "drafting",
+        "auditing",
+        "hr_reviewing",
+        "needs_content_review",
+        "approved",
+        "failed",
+        "stale"
+      ],
+      "title": "ContentState",
+      "type": "string"
+    },
+    "ExecutionMode": {
+      "enum": [
+        "blind_dual",
+        "single_agent_degraded"
+      ],
+      "title": "ExecutionMode",
+      "type": "string"
+    },
+    "NormalizedInputPacket": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "default": "1.3",
+          "enum": [
+            "1.0",
+            "1.1",
+            "1.2",
+            "1.3"
+          ],
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "run_id": {
+          "pattern": "^cr_[0-9]{8}T[0-9]{6}_[a-z0-9]{6}$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "source_digests": {
+          "$ref": "#/$defs/SourceDigests"
+        },
+        "application_dir": {
+          "pattern": "^applications[\\\\/][^\\r\\n]+$",
+          "title": "Application Dir",
+          "type": "string"
+        },
+        "source_type": {
+          "$ref": "#/$defs/SourceType"
+        },
+        "source_locator": {
+          "title": "Source Locator",
+          "type": "string"
+        },
+        "role_family": {
+          "$ref": "#/$defs/RoleFamily",
+          "default": "ai_product_manager"
+        },
+        "approved_requirement_ids": {
+          "items": {
+            "pattern": "^REQ-[0-9]{3}$",
+            "type": "string"
+          },
+          "title": "Approved Requirement Ids",
+          "type": "array"
+        },
+        "approved_fact_ids": {
+          "items": {
+            "pattern": "^FACT-[A-Z]+-[0-9]{3}-[0-9]{2}$",
+            "type": "string"
+          },
+          "title": "Approved Fact Ids",
+          "type": "array"
+        },
+        "approved_experience_ids": {
+          "items": {
+            "pattern": "^EXP-[A-Z]+-[0-9]{3}$",
+            "type": "string"
+          },
+          "title": "Approved Experience Ids",
+          "type": "array"
+        },
+        "approved_transfer_ids": {
+          "items": {
+            "pattern": "^TR-[0-9]{3}$",
+            "type": "string"
+          },
+          "title": "Approved Transfer Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "run_id",
+        "created_at",
+        "source_digests",
+        "application_dir",
+        "source_type",
+        "source_locator"
+      ],
+      "title": "NormalizedInputPacket",
+      "type": "object"
+    },
+    "RoleFamily": {
+      "enum": [
+        "ai_product_manager",
+        "game_production_pm"
+      ],
+      "title": "RoleFamily",
+      "type": "string"
+    },
+    "RunError": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "pattern": "^[A-Z][A-Z0-9_]+$",
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "recoverable": {
+          "title": "Recoverable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "recoverable"
+      ],
+      "title": "RunError",
+      "type": "object"
+    },
+    "SelectionRevisionRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "round": {
+          "maximum": 2,
+          "minimum": 1,
+          "title": "Round",
+          "type": "integer"
+        },
+        "prior_selected_experience_ids": {
+          "items": {
+            "pattern": "^EXP-[A-Z]+-[0-9]{3}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Prior Selected Experience Ids",
+          "type": "array"
+        },
+        "issue_codes": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Issue Codes",
+          "type": "array"
+        },
+        "requested_at": {
+          "format": "date-time",
+          "title": "Requested At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "round",
+        "prior_selected_experience_ids",
+        "issue_codes",
+        "requested_at"
+      ],
+      "title": "SelectionRevisionRecord",
+      "type": "object"
+    },
+    "SourceDigests": {
+      "additionalProperties": false,
+      "properties": {
+        "jd_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Jd Sha256",
+          "type": "string"
+        },
+        "fact_snapshot_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fact Snapshot Sha256",
+          "type": "string"
+        },
+        "preferences_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Preferences Sha256",
+          "type": "string"
+        },
+        "reference_cards_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Cards Sha256"
+        }
+      },
+      "required": [
+        "jd_sha256",
+        "fact_snapshot_sha256",
+        "preferences_sha256"
+      ],
+      "title": "SourceDigests",
+      "type": "object"
+    },
+    "SourceType": {
+      "enum": [
+        "directory",
+        "text",
+        "url"
+      ],
+      "title": "SourceType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": "1.3",
+      "enum": [
+        "1.0",
+        "1.1",
+        "1.2",
+        "1.3"
+      ],
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^cr_[0-9]{8}T[0-9]{6}_[a-z0-9]{6}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "source_digests": {
+      "$ref": "#/$defs/SourceDigests"
+    },
+    "state": {
+      "$ref": "#/$defs/ContentState"
+    },
+    "execution_mode": {
+      "$ref": "#/$defs/ExecutionMode",
+      "default": "blind_dual"
+    },
+    "input_packet": {
+      "$ref": "#/$defs/NormalizedInputPacket"
+    },
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/ArtifactRecord"
+      },
+      "title": "Artifacts",
+      "type": "array"
+    },
+    "revision_count": {
+      "default": 0,
+      "maximum": 2,
+      "minimum": 0,
+      "title": "Revision Count",
+      "type": "integer"
+    },
+    "selection_revision_count": {
+      "default": 0,
+      "maximum": 2,
+      "minimum": 0,
+      "title": "Selection Revision Count",
+      "type": "integer"
+    },
+    "selection_revisions": {
+      "items": {
+        "$ref": "#/$defs/SelectionRevisionRecord"
+      },
+      "maxItems": 2,
+      "title": "Selection Revisions",
+      "type": "array"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RunError"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "run_id",
+    "created_at",
+    "source_digests",
+    "state",
+    "input_packet"
+  ],
+  "title": "RunManifestArtifact",
+  "type": "object"
+}

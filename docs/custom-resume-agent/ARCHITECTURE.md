@@ -1,14 +1,15 @@
-# 定制简历 Agent V1 架构
+# 定制简历 Agent V1.4 架构
 
 > 状态：已确认
-> 版本：0.2
-> 日期：2026-08-22
+> 版本：0.5
+> 日期：2026-08-26
 
 ## 1. 架构目标
 
 V1 是 Codex 内部可发现的内容工作流，不是常驻应用或外部 LLM 服务。架构需保证：
 
 - 事实和候选补全严格分层；
+- 能力发散有完整证据链，选材扩大化不等于事实扩大化；
 - LLM 只承担语义分析、写作、融合和质量判断；
 - Schema、状态、引用、数字和不可变字段由确定性代码校验；
 - 并行子代理只读，协调器是唯一文件写入者；
@@ -38,6 +39,14 @@ JD directory / JD text / JD URL
       │        └── Fact store adapter（Markdown + 稳定 ID）
       └── Domain schemas + deterministic rules
                │
+      capability transfer map
+               │
+       full experience scorecard
+               │
+      portfolio composition pass
+               │
+       independent selection audit
+               │
         approved input packet
           ┌────┴────┐
           ▼         ▼
@@ -48,7 +57,9 @@ JD directory / JD text / JD URL
                ▼
       deterministic validation
                ▼
-            Auditor             （只读、两遍审计）
+            Auditor             （只读、两遍基础审计）
+               ▼
+          HR Reviewer           （只读、招聘决策门禁）
                ▼
       immutable run artifacts / content approval
 ```
@@ -62,6 +73,7 @@ JD directory / JD text / JD URL
 计划位于 `.agents/skills/custom-resume/scripts/` 的 Python 模块，使用 Pydantic 2：
 
 - 事实、JD 要求、证据映射、事实差异、草稿、融合决策、审计和运行清单模型；
+- 能力迁移链、组合价值、相似项目分组和板块平衡例外模型；
 - 内容状态转换规则；
 - 事实引用、数字来源、不可变字段、四板块和候选泄漏校验；
 - 引用事实摘要与 `stale` 判定。
@@ -102,14 +114,17 @@ JD directory / JD text / JD URL
 │   └── reference-method-cards/
 └── scripts/
     ├── models.py
-    ├── fact_store.py
-    ├── artifact_store.py
+    ├── fact_library.py
+    ├── storage.py
+    ├── validators.py
+    ├── orchestrator.py
     └── validate_run.py
 
 .codex/agents/
 ├── custom-resume-writer.toml
 ├── custom-resume-asu-writer.toml
-└── custom-resume-auditor.toml
+├── custom-resume-auditor.toml
+└── custom-resume-hr-reviewer.toml
 
 .agents/prompts/custom-resume/
 ├── jd-analysis.md
@@ -119,7 +134,8 @@ JD directory / JD text / JD URL
 ├── asu-writer.md
 ├── asu-writer-game-production.md
 ├── fusion.md
-└── auditor.md
+├── auditor.md
+└── hr-reviewer.md
 
 tests/custom_resume/
 ├── fixtures/
@@ -148,7 +164,7 @@ $custom-resume <application_dir | jd_text | jd_url>
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.3",
   "run_id": "cr_YYYYMMDDTHHMMSS_<suffix>",
   "application_dir": "applications/<company>_<role>",
   "role_family": "ai_product_manager|game_production_pm",
@@ -201,12 +217,70 @@ Writer 与 ASu Writer 必须收到内容等价、摘要一致的输入包。
 |---|---|---|
 | `run.json` | 状态、输入哈希、产物清单、错误、修订次数 | 协调器 |
 | `jd-analysis.json` | 岗位目标、要求、优先级、关键词、风险、理想证据蓝图 | 协调器 |
+| `capability-transfer-map.json` | 事实源动作、目标能力/要求、迁移距离、置信度、可写边界和候选追问 | 协调器 |
 | `evidence-map.json` | requirement_id、coverage、fact_ids、选择状态、真实缺口 | 协调器 |
+| `experience-selection.json` | 完整经历池、岗位匹配分、组合价值、相似分组、等级、覆盖增量、例外、要点预算和选择理由 | 协调器 |
+| `selection-audit-pre.json` | 写作前逐经历 keep/auxiliary/drop/reconsider 结果 | Auditor |
 | `fact-diff.json` | add/replace、旧值、新值、provenance、确认状态 | 协调器 |
 | `draft-writer.json` | 四板块、要点、fact_ids、candidate 标记 | Writer |
 | `draft-asu.json` | 与 Writer 相同的草稿 Schema | ASu Writer |
 | `fusion.json` | 融合稿、来源代理、选择/重写理由、fact_ids | 协调器 |
-| `audit.json` | 硬校验、真实性审计、四维评分、问题、修订历史 | Auditor/协调器 |
+| `audit.json` | 硬校验、真实性审计、五维评分、问题、修订历史 | Auditor/协调器 |
+| `hr-review.json` | 逐经历招聘决策、遗漏事实、面试影响、修订/补问/重选路由 | HR Reviewer/协调器 |
+
+`reference-research.json` 记录来源类型、合格性、脱敏选择规则和降级批准；岗位方法卡本身不能构成同岗位简历样例。
+
+V1.4 新产物使用 Schema `1.3`；`1.0`、`1.1` 和 `1.2` 历史运行继续只读，绝不原地迁移或重写。
+
+### 8.1 能力迁移链
+
+每条 `CapabilityTransfer` 至少包含：
+
+```json
+{
+  "transfer_id": "TR-001",
+  "experience_id": "EXP-PROJECT-009",
+  "fact_ids": ["FACT-PROJECT-009-02"],
+  "source_action": "对接海外开发商与国内发行商并保障按时交付",
+  "target_capability": "跨职能协作与交付推进",
+  "requirement_ids": ["REQ-002"],
+  "distance": "adjacent",
+  "confidence": "high",
+  "writable_scope": "可概括为本地化项目协同和交付推进；不可写团队管理或正式研发排期",
+  "candidate_question_id": null
+}
+```
+
+`distance` 为 `direct|adjacent|analogical|candidate`。`direct`、`adjacent`、`analogical` 必须引用能够语义蕴含源动作的事实；`candidate` 可记录岗位惯例或合理流程假设，但只能连接事实问题，不能进入分数或 Writer 输入。
+
+映射器对每段经历固定扫描八类能力：
+
+1. 规划与项目推进；
+2. 协作与利益相关方；
+3. 质量与风险；
+4. 用户与研究；
+5. 数据与分析；
+6. 内容与沟通；
+7. 产品与技术；
+8. 运营、商业与行业。
+
+每一类必须返回 `supported|candidate|none`，防止模型因经历标题而提前剪枝；只有 `supported` 可以形成前三种迁移距离。系统不要求每段经历拥有全部能力，禁止用常识批量补齐。
+
+岗位匹配仍为 100 分：岗位职责 30、过程/交付 20、结果 15、行业 10、覆盖增量 15、证据强度 10。迁移距离对相关分项使用确定性上限系数 `direct=1.0`、`adjacent=0.8`、`analogical=0.6`、`candidate=0`，防止不同场景的能力被归零，也防止类比能力反超直接事实。代码复算分项、总分和 70/55 等级；仅有行业亲和且无源动作链的 `affinity_only` 经历封顶 54。
+
+### 8.2 组合价值与板块平衡
+
+每段经历另有 0–20 的 `portfolio_value_score`，由板块补足、能力多样性、叙事独特性和非同质化各 0–5 组成并由代码复算。该分数与岗位匹配分并列展示，不相加；协调器必须解释为何组合价值足以改变最终排序。
+
+选择必须满足：
+
+- 同一 `similarity_group` 的个人开发项目最多 2 项；
+- 默认至少 2 项 `WORK`；
+- 辅助经历要点占比不超过 25%；
+- 排除更高岗位匹配分或更高组合价值经历时记录机会成本；
+- 最多一个 `section_balance_override`。例外只能指向低于 55 分的 `WORK`，必须有用户批准时间、理由、比较过的替代项和最多 2 个要点；原始分数与等级保持不变。
+
+`section_balance_override` 不得绕过事实引用、未确认候选隔离、教育锁定、分类或真实性校验。
 
 Markdown 视图由已通过 Schema 的 JSON 生成或逐字段转写，不能成为结构化状态的反向解析来源。
 
@@ -217,15 +291,20 @@ Markdown 视图由已通过 Schema 的 JSON 生成或逐字段转写，不能成
 ```text
 not_started
   → analyzing
-  → needs_input
+  → needs_input / awaiting_reference_approval
   → awaiting_selection_approval
   → drafting
   → auditing
+  → hr_reviewing
   → needs_content_review
   → approved
 ```
 
 任意执行状态可转 `failed`；`approved` 在引用事实变化时转 `stale`。非法跳转必须由确定性代码拒绝。
+
+融合后机会成本审计返回 `reselect_required` 时允许 `auditing → awaiting_selection_approval`。协调器保存重选记录、清除获批经历和当前草稿；最多重选两轮。
+
+Schema 1.3 中，Auditor 全部通过后进入 `hr_reviewing`，不能直接进入内容验收。HR Reviewer 通过才进入 `needs_content_review`；可由现有事实修复时 `hr_reviewing → auditing` 并重跑全链路；需要换经历时返回 `awaiting_selection_approval`；需要新事实或两轮后仍不足时提交为不可批准的 `needs_content_review` 运行并展示问题。
 
 `applications/<公司>_<岗位>/manifest.json` 增加：
 
@@ -246,8 +325,12 @@ not_started
 
 - Prompt 只定义语义任务、输入字段和输出 Schema，不写文件、不推进状态。
 - 自定义代理配置只定义角色、只读权限和输出责任，不复制完整产品文档。
-- 协调器不生成两个初始草稿，但负责 JD 分析、融合裁决和唯一文件写入。
-- Auditor 只读融合稿、证据映射和事实快照；先审真实性，再审 HR 质量。
+- 协调器不生成两个初始草稿，但负责 JD 分析、能力迁移映射、组合选材、融合裁决和唯一文件写入。
+- Writer 输入只包含用户批准的经历、事实和 `direct|adjacent|analogical` 迁移链；`writable_scope` 是表达上限，不能成为新的候选人事实。
+- 教育由固定基线生成器逐字段复制；Writer 不得改写课程或用课程推导岗位能力。自我能力子类由确定性枚举校验为专业硬技能、综合软技能、游戏体验、语言能力。
+- Auditor 以两个独立调用运行：写作前读取完整经历池和选材表，融合后读取融合稿、最高价值落选项、证据映射和事实快照；先审真实性，再审正向证据、选材质量和 HR 质量。
+- HR Reviewer 是第三种独立只读调用，只在融合后 Auditor 通过时运行。它读取目标 JD、融合稿、完整选中事实、基础审计和已使用事实，按招聘决策而非 Schema 合规评分；只有 `strong_push` 且总分、五维均不低于 8.5 才通过。
+- HR Reviewer 必须返回逐经历缺陷、遗漏事实 ID、合理要点数和三路路由：现有事实定向修订、事实补问或重新选材；它不能编辑稿件或自行补事实。
 - 所有代理默认继承当前 Codex 模型和推理配置，不接入外部 Provider。
 
 ## 11. 写入与一致性
@@ -267,12 +350,17 @@ not_started
 | JD 为空或无法识别岗位 | 停止并请求有效输入 |
 | 公司/岗位无法可靠识别 | 请求用户确认，不猜目录名 |
 | 事实库缺失或 ID 重复 | 硬失败，不启动 Writer |
+| 能力迁移链无事实、源动作或可写边界 | 硬失败，不进入选材 |
+| 仅存在可能流程、没有事实支持 | 生成 `candidate` 问题，计分为 0 |
+| 工作经历不足 2 项 | 等待用户选择已确认工作经历；确实不足时可批准一次板块平衡例外 |
+| 同类个人开发项目超过 2 项 | 硬拒绝选材批准，要求比较并淘汰同质项 |
 | 用户拒绝 fact diff | 保留运行记录，事实库不变 |
 | 子代理不可用 | 暂停，请用户选择重试或显式降级 |
 | 单个 Writer 失败 | 不融合单稿，先重试或转人工 |
 | 确定性校验失败 | 不启动 Auditor，返回具体错误 |
 | Auditor 不通过 | 最多定向修订 2 轮，之后转人工 |
-| 联网研究失败 | 使用本地方法卡，标记研究降级 |
+| HR Reviewer 低于 `strong_push`/8.5 | 现有事实足够则定向修订并重跑全部审计；缺事实则生成问题；需换经历则回到选材；总计最多 2 轮 |
+| 联网研究失败或没有合格同岗样例 | 进入 `awaiting_reference_approval`；用户批准降级后才继续 |
 | 引用事实变化 | 批准稿转 `stale`，不自动重写 |
 
 ## 13. 安全与隐私

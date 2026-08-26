@@ -1,0 +1,146 @@
+{
+  "$defs": {
+    "RoleFamily": {
+      "enum": [
+        "ai_product_manager",
+        "game_production_pm"
+      ],
+      "title": "RoleFamily",
+      "type": "string"
+    },
+    "SourceDigests": {
+      "additionalProperties": false,
+      "properties": {
+        "jd_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Jd Sha256",
+          "type": "string"
+        },
+        "fact_snapshot_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fact Snapshot Sha256",
+          "type": "string"
+        },
+        "preferences_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Preferences Sha256",
+          "type": "string"
+        },
+        "reference_cards_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Cards Sha256"
+        }
+      },
+      "required": [
+        "jd_sha256",
+        "fact_snapshot_sha256",
+        "preferences_sha256"
+      ],
+      "title": "SourceDigests",
+      "type": "object"
+    },
+    "SourceType": {
+      "enum": [
+        "directory",
+        "text",
+        "url"
+      ],
+      "title": "SourceType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": "1.3",
+      "enum": [
+        "1.0",
+        "1.1",
+        "1.2",
+        "1.3"
+      ],
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^cr_[0-9]{8}T[0-9]{6}_[a-z0-9]{6}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "source_digests": {
+      "$ref": "#/$defs/SourceDigests"
+    },
+    "application_dir": {
+      "pattern": "^applications[\\\\/][^\\r\\n]+$",
+      "title": "Application Dir",
+      "type": "string"
+    },
+    "source_type": {
+      "$ref": "#/$defs/SourceType"
+    },
+    "source_locator": {
+      "title": "Source Locator",
+      "type": "string"
+    },
+    "role_family": {
+      "$ref": "#/$defs/RoleFamily",
+      "default": "ai_product_manager"
+    },
+    "approved_requirement_ids": {
+      "items": {
+        "pattern": "^REQ-[0-9]{3}$",
+        "type": "string"
+      },
+      "title": "Approved Requirement Ids",
+      "type": "array"
+    },
+    "approved_fact_ids": {
+      "items": {
+        "pattern": "^FACT-[A-Z]+-[0-9]{3}-[0-9]{2}$",
+        "type": "string"
+      },
+      "title": "Approved Fact Ids",
+      "type": "array"
+    },
+    "approved_experience_ids": {
+      "items": {
+        "pattern": "^EXP-[A-Z]+-[0-9]{3}$",
+        "type": "string"
+      },
+      "title": "Approved Experience Ids",
+      "type": "array"
+    },
+    "approved_transfer_ids": {
+      "items": {
+        "pattern": "^TR-[0-9]{3}$",
+        "type": "string"
+      },
+      "title": "Approved Transfer Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "run_id",
+    "created_at",
+    "source_digests",
+    "application_dir",
+    "source_type",
+    "source_locator"
+  ],
+  "title": "NormalizedInputPacket",
+  "type": "object"
+}

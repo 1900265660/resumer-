@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,27 +18,46 @@ from models import (  # noqa: E402
     AuditArtifact,
     AuditDisposition,
     AuditFinding,
+    CapabilityCategory,
+    CapabilityCategoryScan,
+    CapabilityStatus,
+    CapabilityTransfer,
+    CapabilityTransferMapArtifact,
     ConfirmationStatus,
+    ContentMetrics,
     ContentState,
     CoverageLevel,
     DraftAgent,
     DraftArtifact,
+    DeterministicValidationArtifact,
     DiffAction,
     EvidenceMapArtifact,
     EvidenceMapping,
+    ExperienceCandidateScore,
+    ExperienceSelectionArtifact,
+    ExperienceTier,
     FactDiffArtifact,
     FactDiffOperation,
     FactProvenance,
     FusionAction,
     FusionArtifact,
     FusionDecision,
+    HrDecisionDimension,
+    HrExperienceReview,
+    HrRecommendation,
+    HrReviewArtifact,
+    HrReviewDisposition,
+    InterviewImpact,
+    JobTaskEvidenceLevel,
     JDAnalysisArtifact,
     JobRequirement,
     QualityAudit,
     QualityDimension,
+    PortfolioValue,
     ReferenceResearchArtifact,
     ReferenceResearchMode,
     ReferenceSource,
+    ReferenceSourceType,
     RoleFamily,
     RequirementPriority,
     RevisionRecord,
@@ -47,7 +67,15 @@ from models import (  # noqa: E402
     ResumeSectionName,
     SourceType,
     Severity,
+    ScoreComponent,
+    SelectionAuditArtifact,
+    SelectionAuditPhase,
+    SelectionAuditRow,
+    SelectionAuditVerdict,
     TruthAudit,
+    TransferConfidence,
+    TransferDistance,
+    TransferScoreCredit,
 )
 from orchestrator import (  # noqa: E402
     AgentHandoffError,
@@ -55,6 +83,7 @@ from orchestrator import (  # noqa: E402
     DeterministicGateError,
     HumanGateError,
     OrchestrationError,
+    NormalizedRunInput,
     normalize_run_input,
 )
 from storage import (  # noqa: E402
@@ -134,6 +163,7 @@ def normalized(tmp_path: Path):
         jd_text=JD_TEXT,
         now=NOW,
         run_id=RUN_ID,
+        schema_version="1.1",
     )
 
 
@@ -156,6 +186,7 @@ def test_game_role_selects_game_method_card_and_freezes_role(tmp_path: Path) -> 
 
 def analysis_artifacts(packet):
     jd = JDAnalysisArtifact(
+        schema_version=packet.schema_version,
         run_id=packet.run_id,
         created_at=packet.created_at,
         source_digests=packet.source_digests,
@@ -172,6 +203,7 @@ def analysis_artifacts(packet):
         ],
     )
     evidence = EvidenceMapArtifact(
+        schema_version=packet.schema_version,
         run_id=packet.run_id,
         created_at=packet.created_at,
         source_digests=packet.source_digests,
@@ -188,6 +220,7 @@ def analysis_artifacts(packet):
         ],
     )
     fact_diff = FactDiffArtifact(
+        schema_version=packet.schema_version,
         run_id=packet.run_id,
         created_at=packet.created_at,
         source_digests=packet.source_digests,
@@ -202,6 +235,64 @@ def approved_evidence(evidence: EvidenceMapArtifact) -> EvidenceMapArtifact:
     payload["approved_at"] = NOW
     payload["mappings"][0]["selected"] = True
     return EvidenceMapArtifact.model_validate(payload)
+
+
+def approve_run_selection(run: CoordinatorRun) -> None:
+    if run.state is ContentState.AWAITING_REFERENCE_APPROVAL:
+        run.approve_reference_degradation(
+            approval_granted=True,
+            reason="测试显式批准在参考不足时降级继续。",
+            approved_at=NOW,
+        )
+    experiences, _ = parse_fact_records(run.normalized.fact_text)
+    candidate = ExperienceCandidateScore(
+        experience_id="EXP-PROJECT-001",
+        fact_ids=["FACT-PROJECT-001-01", "FACT-PROJECT-001-02"],
+        responsibility_score=25,
+        process_delivery_score=18,
+        result_score=12,
+        domain_score=6,
+        incremental_coverage_score=12,
+        evidence_strength_score=8,
+        job_task_evidence=JobTaskEvidenceLevel.DIRECT,
+        total_score=81,
+        tier=ExperienceTier.CORE,
+        matched_requirement_ids=["REQ-001"],
+        incremental_requirement_ids=["REQ-001"],
+        selected=True,
+        proposed_bullet_count=1,
+        rationale="直接包含调研、原型和评测证据。",
+    )
+    proposal = ExperienceSelectionArtifact(
+        schema_version=run.packet.schema_version,
+        run_id=run.packet.run_id,
+        created_at=run.packet.created_at,
+        source_digests=run.packet.source_digests,
+        candidates=[candidate],
+    )
+    run.record_experience_selection(proposal, experiences)
+    run.record_selection_audit(
+        SelectionAuditArtifact(
+            schema_version=run.packet.schema_version,
+            run_id=run.packet.run_id,
+            created_at=run.packet.created_at,
+            source_digests=run.packet.source_digests,
+            phase=SelectionAuditPhase.PRE_DRAFT,
+            rows=[
+                SelectionAuditRow(
+                    experience_id="EXP-PROJECT-001",
+                    verdict=SelectionAuditVerdict.KEEP,
+                    rationale="最高价值直接证据应保留。",
+                )
+            ],
+            passed=True,
+        )
+    )
+    run.approve_selection(
+        proposal.model_copy(
+            update={"selection_approved": True, "approved_at": NOW}
+        )
+    )
 
 
 def sections(agent: DraftAgent, text: str) -> list[ResumeSection]:
@@ -233,6 +324,7 @@ def sections(agent: DraftAgent, text: str) -> list[ResumeSection]:
 
 def draft(packet, agent: DraftAgent) -> DraftArtifact:
     return DraftArtifact(
+        schema_version=packet.schema_version,
         run_id=packet.run_id,
         created_at=packet.created_at,
         source_digests=packet.source_digests,
@@ -250,6 +342,7 @@ def fused(packet, text: str = "完成三轮评测，准确率提升至 88%。") 
         primary_value="AI 产品评测",
     )
     return FusionArtifact(
+        schema_version=packet.schema_version,
         run_id=packet.run_id,
         created_at=packet.created_at,
         source_digests=packet.source_digests,
@@ -286,6 +379,7 @@ def fused(packet, text: str = "完成三轮评测，准确率提升至 88%。") 
 def passing_audit(run: CoordinatorRun) -> AuditArtifact:
     dimension = QualityDimension(score=8.5, evidence=["达到内容门槛"])
     return AuditArtifact(
+        schema_version=run.packet.schema_version,
         run_id=run.packet.run_id,
         created_at=run.packet.created_at,
         source_digests=run.packet.source_digests,
@@ -294,6 +388,7 @@ def passing_audit(run: CoordinatorRun) -> AuditArtifact:
         truth=TruthAudit(passed=True),
         quality=QualityAudit(
             jd_coverage=dimension,
+            selection_quality=dimension,
             evidence_depth=dimension,
             hr_scan=dimension,
             language_naturalness=dimension,
@@ -313,6 +408,7 @@ def failing_audit(run: CoordinatorRun, revision_count: int) -> AuditArtifact:
         message="事实不能支持该因果关系",
     )
     return AuditArtifact(
+        schema_version=run.packet.schema_version,
         run_id=run.packet.run_id,
         created_at=run.packet.created_at,
         source_digests=run.packet.source_digests,
@@ -321,6 +417,7 @@ def failing_audit(run: CoordinatorRun, revision_count: int) -> AuditArtifact:
         truth=TruthAudit(passed=False, findings=[finding]),
         quality=QualityAudit(
             jd_coverage=dimension,
+            selection_quality=dimension,
             evidence_depth=dimension,
             hr_scan=dimension,
             language_naturalness=dimension,
@@ -339,6 +436,35 @@ def failing_audit(run: CoordinatorRun, revision_count: int) -> AuditArtifact:
             if revision_count >= 2
             else AuditDisposition.FAILED
         ),
+    )
+
+
+def reselection_audit(run: CoordinatorRun) -> AuditArtifact:
+    passing = QualityDimension(score=8.5, evidence=["达到门槛"])
+    weak_selection = QualityDimension(
+        score=5,
+        evidence=["弱辅助内容挤占更强项目证据"],
+        recommendations=["返回选材并重新比较完整经历池"],
+    )
+    return AuditArtifact(
+        schema_version=run.packet.schema_version,
+        run_id=run.packet.run_id,
+        created_at=run.packet.created_at,
+        source_digests=run.packet.source_digests,
+        deterministic_passed=run.current_validation.passed,
+        deterministic_findings=run.current_validation.findings,
+        truth=TruthAudit(passed=True),
+        quality=QualityAudit(
+            jd_coverage=passing,
+            selection_quality=weak_selection,
+            evidence_depth=passing,
+            hr_scan=passing,
+            language_naturalness=passing,
+            passed=False,
+        ),
+        reselect_required=True,
+        selection_issue_codes=["STRONGER_EXPERIENCE_OMITTED"],
+        disposition=AuditDisposition.FAILED,
     )
 
 
@@ -400,13 +526,30 @@ def test_text_and_url_inputs_require_confirmed_company_and_role(tmp_path: Path) 
         )
 
 
+def test_directory_input_rejects_nested_application_path(tmp_path: Path) -> None:
+    repo = prepare_repo(tmp_path)
+    nested = repo / "applications" / "nested" / "测试公司_AI产品经理"
+    nested.mkdir(parents=True)
+    (nested / "jd.md").write_text(JD_TEXT, encoding="utf-8")
+    with pytest.raises(OrchestrationError, match="one direct child"):
+        normalize_run_input(
+            repo,
+            source_type=SourceType.DIRECTORY,
+            source_locator="applications/nested/测试公司_AI产品经理/jd.md",
+            application_dir=nested,
+            now=NOW,
+            run_id=RUN_ID,
+        )
+
+
 def test_reference_routing_records_local_supplement_or_network_degradation(
     tmp_path: Path,
 ) -> None:
     run = CoordinatorRun.create(normalized(tmp_path))
-    assert run.reference_research.mode is ReferenceResearchMode.LOCAL
+    assert run.reference_research.mode is ReferenceResearchMode.DEGRADED
 
     supplemented = ReferenceResearchArtifact(
+        schema_version=run.packet.schema_version,
         run_id=run.packet.run_id,
         created_at=run.packet.created_at,
         source_digests=run.packet.source_digests,
@@ -415,17 +558,29 @@ def test_reference_routing_records_local_supplement_or_network_degradation(
         missing_topics=["消费产品增长"],
         sources=[
             ReferenceSource(
-                title="脱敏行业方法来源",
-                url="https://example.test/ai-pm-method",
+                title="脱敏同岗位简历样例",
+                url="https://example.test/ai-pm-resume",
                 retrieved_at=NOW,
-            )
+                source_type=ReferenceSourceType.RESUME_SAMPLE,
+                qualified=True,
+            ),
+            ReferenceSource(
+                title="官方岗位职责",
+                url="https://example.test/ai-pm-role",
+                retrieved_at=NOW,
+                source_type=ReferenceSourceType.OFFICIAL_ROLE,
+                qualified=True,
+            ),
         ],
         sanitized_method_cards=["只保留方法，不复制参考候选人经历。"],
+        selection_rules=["优先直接岗位动作，再考虑可迁移项目证据。"],
+        qualified=True,
     )
     run.record_reference_research(supplemented)
     assert run.reference_research.mode is ReferenceResearchMode.SUPPLEMENTED
 
     degraded = ReferenceResearchArtifact(
+        schema_version=run.packet.schema_version,
         run_id=run.packet.run_id,
         created_at=run.packet.created_at,
         source_digests=run.packet.source_digests,
@@ -437,8 +592,12 @@ def test_reference_routing_records_local_supplement_or_network_degradation(
     run.record_reference_research(degraded)
     jd, evidence, fact_diff = analysis_artifacts(run.packet)
     run.record_analysis(jd, evidence, fact_diff)
-    assert run.state is ContentState.AWAITING_SELECTION_APPROVAL
+    assert run.state is ContentState.AWAITING_REFERENCE_APPROVAL
     assert run.reference_research.mode is ReferenceResearchMode.DEGRADED
+    run.approve_reference_degradation(
+        approval_granted=True, reason="测试批准降级。", approved_at=NOW
+    )
+    assert run.state is ContentState.AWAITING_SELECTION_APPROVAL
 
 
 def test_human_selection_gate_and_blind_writer_packets(tmp_path: Path) -> None:
@@ -449,14 +608,20 @@ def test_human_selection_gate_and_blind_writer_packets(tmp_path: Path) -> None:
     with pytest.raises(HumanGateError, match="approved selection"):
         run.writer_packet(experiences, facts)
 
-    run.approve_selection(approved_evidence(evidence))
+    approve_run_selection(run)
     first = run.writer_packet(experiences, facts)
     second = run.writer_packet(experiences, facts)
     assert first == second
     assert "agent" not in first
     assert {item["fact_id"] for item in first["confirmed_facts"]} == {
+        "FACT-EDU-001-01",
         "FACT-PROJECT-001-01",
         "FACT-PROJECT-001-02",
+        "FACT-SKILL-001-01",
+    }
+    assert {item["experience_id"] for item in first["baseline_experiences"]} == {
+        "EXP-EDU-001",
+        "EXP-SKILL-001",
     }
 
 
@@ -467,6 +632,9 @@ def test_human_gate_checkpoint_resumes_same_run_across_processes(
     run = CoordinatorRun.create(initial_input)
     jd, evidence, fact_diff = analysis_artifacts(run.packet)
     run.record_analysis(jd, evidence, fact_diff)
+    run.approve_reference_degradation(
+        approval_granted=True, reason="测试批准降级。", approved_at=NOW
+    )
 
     path = checkpoint_path(run.normalized.application_dir, RUN_ID)
     assert path.is_file()
@@ -485,7 +653,7 @@ def test_human_gate_checkpoint_resumes_same_run_across_processes(
     resumed = CoordinatorRun.resume(resume_input)
     assert resumed.state is ContentState.AWAITING_SELECTION_APPROVAL
     assert resumed.jd_analysis == jd
-    resumed.approve_selection(approved_evidence(evidence))
+    approve_run_selection(resumed)
 
     drafting = load_checkpoint(resumed.normalized.application_dir, RUN_ID)
     assert drafting.state is ContentState.DRAFTING
@@ -539,7 +707,7 @@ def test_fact_diff_requires_explicit_resolution(tmp_path: Path) -> None:
     rejected_payload["questions"][0]["status"] = "skipped"
     rejected = FactDiffArtifact.model_validate(rejected_payload)
     run.resolve_fact_diff(rejected)
-    assert run.state is ContentState.AWAITING_SELECTION_APPROVAL
+    assert run.state is ContentState.AWAITING_REFERENCE_APPROVAL
 
 
 def test_approved_fact_operations_write_atomically_then_require_reanalysis(
@@ -584,14 +752,14 @@ def test_approved_fact_operations_write_atomically_then_require_reanalysis(
 
     refreshed_jd, refreshed_evidence, _ = analysis_artifacts(run.packet)
     run.record_analysis(refreshed_jd, refreshed_evidence, run.fact_diff)
-    assert run.state is ContentState.AWAITING_SELECTION_APPROVAL
+    assert run.state is ContentState.AWAITING_REFERENCE_APPROVAL
 
 
 def test_full_content_only_flow_commits_reviewable_run_and_pointer(tmp_path: Path) -> None:
     run = CoordinatorRun.create(normalized(tmp_path))
     jd, evidence, fact_diff = analysis_artifacts(run.packet)
     run.record_analysis(jd, evidence, fact_diff)
-    run.approve_selection(approved_evidence(evidence))
+    approve_run_selection(run)
     experiences, facts = parse_fact_records(run.normalized.fact_text)
     run.record_drafts(
         draft(run.packet, DraftAgent.WRITER),
@@ -638,7 +806,7 @@ def test_deterministic_failure_blocks_auditor(tmp_path: Path) -> None:
     run = CoordinatorRun.create(normalized(tmp_path))
     jd, evidence, fact_diff = analysis_artifacts(run.packet)
     run.record_analysis(jd, evidence, fact_diff)
-    run.approve_selection(approved_evidence(evidence))
+    approve_run_selection(run)
     experiences, facts = parse_fact_records(run.normalized.fact_text)
     run.record_drafts(
         draft(run.packet, DraftAgent.WRITER),
@@ -659,7 +827,7 @@ def test_subagent_unavailability_never_silently_breaks_isolation(tmp_path: Path)
     run = CoordinatorRun.create(normalized(tmp_path))
     jd, evidence, fact_diff = analysis_artifacts(run.packet)
     run.record_analysis(jd, evidence, fact_diff)
-    run.approve_selection(approved_evidence(evidence))
+    approve_run_selection(run)
     with pytest.raises(HumanGateError, match="user must choose"):
         run.handle_subagent_unavailable()
     assert run.handle_subagent_unavailable("retry") == "retry"
@@ -673,7 +841,7 @@ def test_audit_allows_at_most_two_directed_revision_rounds(tmp_path: Path) -> No
     run = CoordinatorRun.create(normalized(tmp_path))
     jd, evidence, fact_diff = analysis_artifacts(run.packet)
     run.record_analysis(jd, evidence, fact_diff)
-    run.approve_selection(approved_evidence(evidence))
+    approve_run_selection(run)
     experiences, facts = parse_fact_records(run.normalized.fact_text)
     run.record_drafts(
         draft(run.packet, DraftAgent.WRITER),
@@ -699,7 +867,537 @@ def test_wrong_agent_lane_is_rejected(tmp_path: Path) -> None:
     run = CoordinatorRun.create(normalized(tmp_path))
     jd, evidence, fact_diff = analysis_artifacts(run.packet)
     run.record_analysis(jd, evidence, fact_diff)
-    run.approve_selection(approved_evidence(evidence))
+    approve_run_selection(run)
     writer = draft(run.packet, DraftAgent.WRITER)
     with pytest.raises(AgentHandoffError, match="ASu lane"):
         run.record_drafts(writer, writer)
+
+
+def test_post_fusion_opportunity_cost_failure_returns_to_selection(tmp_path: Path) -> None:
+    run = CoordinatorRun.create(normalized(tmp_path))
+    jd, evidence, fact_diff = analysis_artifacts(run.packet)
+    run.record_analysis(jd, evidence, fact_diff)
+    approve_run_selection(run)
+    experiences, facts = parse_fact_records(run.normalized.fact_text)
+    run.record_drafts(
+        draft(run.packet, DraftAgent.WRITER),
+        draft(run.packet, DraftAgent.ASU_WRITER),
+    )
+    run.record_fusion(fused(run.packet), experiences, facts)
+
+    assert run.record_audit(reselection_audit(run)) is False
+    assert run.state is ContentState.AWAITING_SELECTION_APPROVAL
+    assert run.packet.approved_experience_ids == []
+    assert run.experience_selection is not None
+    assert not any(item.selected for item in run.experience_selection.candidates)
+    assert run.writer_draft is None
+    assert run.selection_revisions[0].issue_codes == [
+        "STRONGER_EXPERIENCE_OMITTED"
+    ]
+
+
+def test_v12_transfer_map_gates_selection_and_writer_packet(tmp_path: Path) -> None:
+    prepare_repo(tmp_path)
+    normalized_v12 = normalize_run_input(
+        tmp_path,
+        source_type=SourceType.TEXT,
+        source_locator="inline:text",
+        company="测试公司V12",
+        role="AI产品经理",
+        jd_text=JD_TEXT,
+        now=NOW,
+        run_id=RUN_ID,
+    )
+    run = CoordinatorRun.create(normalized_v12)
+    jd, evidence, fact_diff = analysis_artifacts(run.packet)
+    run.record_analysis(jd, evidence, fact_diff)
+    run.approve_reference_degradation(
+        approval_granted=True,
+        reason="测试显式批准参考降级",
+        approved_at=NOW,
+    )
+    experiences, facts = parse_fact_records(run.normalized.fact_text)
+    transfer = CapabilityTransfer(
+        transfer_id="TR-001",
+        experience_id="EXP-PROJECT-001",
+        category=CapabilityCategory.PRODUCT_TECHNOLOGY,
+        fact_ids=["FACT-PROJECT-001-01", "FACT-PROJECT-001-02"],
+        source_action="完成问答原型并进行三轮评测",
+        target_capability="AI 产品原型与效果评测",
+        requirement_ids=["REQ-001"],
+        distance=TransferDistance.ADJACENT,
+        confidence=TransferConfidence.HIGH,
+        credit_multiplier=0.8,
+        writable_scope="可写问答原型和三轮评测，不扩写线上推广",
+    )
+    scans = [
+        CapabilityCategoryScan(
+            experience_id="EXP-PROJECT-001",
+            category=category,
+            status=(
+                CapabilityStatus.SUPPORTED
+                if category is CapabilityCategory.PRODUCT_TECHNOLOGY
+                else CapabilityStatus.NONE
+            ),
+            transfer_ids=(
+                ["TR-001"]
+                if category is CapabilityCategory.PRODUCT_TECHNOLOGY
+                else []
+            ),
+            rationale="逐类完整扫描",
+        )
+        for category in CapabilityCategory
+    ]
+    transfer_map = CapabilityTransferMapArtifact(
+        run_id=run.packet.run_id,
+        created_at=NOW,
+        source_digests=run.packet.source_digests,
+        experience_ids=["EXP-PROJECT-001"],
+        transfers=[transfer],
+        scans=scans,
+    )
+    run.record_capability_transfer_map(transfer_map, experiences, facts)
+    transfer_hash = hashlib.sha256(
+        json.dumps(
+            transfer_map.model_dump(mode="json"),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    candidate = ExperienceCandidateScore(
+        experience_id="EXP-PROJECT-001",
+        fact_ids=["FACT-PROJECT-001-01", "FACT-PROJECT-001-02"],
+        responsibility_score=25,
+        process_delivery_score=18,
+        result_score=12,
+        domain_score=6,
+        incremental_coverage_score=12,
+        evidence_strength_score=8,
+        job_task_evidence=JobTaskEvidenceLevel.DIRECT,
+        total_score=81,
+        tier=ExperienceTier.CORE,
+        matched_requirement_ids=["REQ-001"],
+        incremental_requirement_ids=["REQ-001"],
+        selected=True,
+        proposed_bullet_count=1,
+        rationale="直接证据并经迁移链追踪",
+        capability_transfer_ids=["TR-001"],
+        transfer_score_credits=[
+            TransferScoreCredit(
+                transfer_id="TR-001",
+                component=ScoreComponent.PROCESS_DELIVERY,
+                base_points=10,
+                credited_points=8,
+            )
+        ],
+        portfolio_value_score=PortfolioValue(
+            section_balance=2,
+            capability_diversity=4,
+            narrative_uniqueness=4,
+            non_redundancy=4,
+            total=14,
+        ),
+        similarity_group="个人AI产品Demo",
+        is_personal_development=True,
+    )
+    proposal = ExperienceSelectionArtifact(
+        run_id=run.packet.run_id,
+        created_at=NOW,
+        source_digests=run.packet.source_digests,
+        capability_transfer_map_sha256=transfer_hash,
+        candidates=[candidate],
+    )
+    excessive_candidate = candidate.model_copy(
+        update={
+            "transfer_score_credits": [
+                TransferScoreCredit(
+                    transfer_id="TR-001",
+                    component=ScoreComponent.PROCESS_DELIVERY,
+                    base_points=10,
+                    credited_points=9,
+                )
+            ]
+        }
+    )
+    excessive = proposal.model_copy(update={"candidates": [excessive_candidate]})
+    with pytest.raises(AgentHandoffError, match="transfer credit exceeds adjacent limit"):
+        run.record_experience_selection(excessive, experiences)
+    run.record_experience_selection(proposal, experiences)
+    run.record_selection_audit(
+        SelectionAuditArtifact(
+            run_id=run.packet.run_id,
+            created_at=NOW,
+            source_digests=run.packet.source_digests,
+            phase=SelectionAuditPhase.PRE_DRAFT,
+            rows=[
+                SelectionAuditRow(
+                    experience_id="EXP-PROJECT-001",
+                    verdict=SelectionAuditVerdict.KEEP,
+                    rationale="迁移链、岗位分和组合价值均可审计",
+                )
+            ],
+            passed=True,
+        )
+    )
+    run.approve_selection(
+        proposal.model_copy(
+            update={"selection_approved": True, "approved_at": NOW}
+        )
+    )
+    packet = run.writer_packet(experiences, facts)
+    assert run.packet.approved_transfer_ids == ["TR-001"]
+    assert [item["transfer_id"] for item in packet["approved_capability_transfers"]] == ["TR-001"]
+    assert packet["fixed_education_baseline"][0]["facts"][0]["text"] == "测试大学，产品专业，本科，2022/09–2026/06。"
+    assert packet["fixed_ability_headings"] == ["专业硬技能", "综合软技能", "游戏体验", "语言能力"]
+
+
+def v13_run_at_audit(tmp_path: Path) -> CoordinatorRun:
+    prepare_repo(tmp_path)
+    base = normalize_run_input(
+        tmp_path,
+        source_type=SourceType.TEXT,
+        source_locator="inline:text",
+        company="测试公司V13",
+        role="AI产品经理",
+        jd_text=JD_TEXT,
+        now=NOW,
+        run_id=RUN_ID,
+        schema_version="1.3",
+    )
+    packet = base.packet.model_copy(
+        update={
+            "approved_requirement_ids": ["REQ-001"],
+            "approved_fact_ids": [
+                "FACT-PROJECT-001-01",
+                "FACT-PROJECT-001-02",
+            ],
+            "approved_experience_ids": ["EXP-PROJECT-001"],
+            "approved_transfer_ids": ["TR-001"],
+        }
+    )
+    normalized_v13 = NormalizedRunInput(
+        packet=packet,
+        application_dir=base.application_dir,
+        jd_text=base.jd_text,
+        fact_text=base.fact_text,
+        preferences_text=base.preferences_text,
+        reference_cards_text=base.reference_cards_text,
+    )
+    jd, evidence, fact_diff = analysis_artifacts(packet)
+    candidate = ExperienceCandidateScore(
+        experience_id="EXP-PROJECT-001",
+        fact_ids=["FACT-PROJECT-001-01", "FACT-PROJECT-001-02"],
+        responsibility_score=25,
+        process_delivery_score=18,
+        result_score=12,
+        domain_score=6,
+        incremental_coverage_score=12,
+        evidence_strength_score=8,
+        job_task_evidence=JobTaskEvidenceLevel.DIRECT,
+        total_score=81,
+        tier=ExperienceTier.CORE,
+        matched_requirement_ids=["REQ-001"],
+        incremental_requirement_ids=["REQ-001"],
+        selected=True,
+        proposed_bullet_count=1,
+        rationale="直接证据",
+        capability_transfer_ids=["TR-001"],
+        transfer_score_credits=[
+            TransferScoreCredit(
+                transfer_id="TR-001",
+                component=ScoreComponent.PROCESS_DELIVERY,
+                base_points=5,
+                credited_points=5,
+            )
+        ],
+        portfolio_value_score=PortfolioValue(
+            section_balance=2,
+            capability_diversity=4,
+            narrative_uniqueness=4,
+            non_redundancy=4,
+            total=14,
+        ),
+        similarity_group="AI原型",
+        is_personal_development=True,
+    )
+    selection = ExperienceSelectionArtifact(
+        schema_version="1.3",
+        run_id=packet.run_id,
+        created_at=packet.created_at,
+        source_digests=packet.source_digests,
+        candidates=[candidate],
+        capability_transfer_map_sha256="d" * 64,
+        selection_approved=True,
+        approved_at=NOW,
+    )
+    project_bullet = ResumeBullet(
+        bullet_id="FUSION-001",
+        text="完成 3 轮评测，准确率提升至 88%。",
+        fact_ids=["FACT-PROJECT-001-01"],
+        requirement_ids=["REQ-001"],
+        primary_value="AI 产品评测",
+    )
+    decisions = [
+        FusionDecision(
+            decision_id="DEC-001",
+            action=FusionAction.REWRITE_FROM_BOTH,
+            source_bullet_ids=["WRITER-001", "ASU-001"],
+            output_bullet_id="FUSION-001",
+            output_text=project_bullet.text,
+            fact_ids=project_bullet.fact_ids,
+            requirement_ids=project_bullet.requirement_ids,
+            rationale="事实一致",
+        )
+    ]
+    ability_entries = []
+    for index, heading in enumerate(
+        ["专业硬技能", "综合软技能", "游戏体验", "语言能力"], start=2
+    ):
+        bullet = ResumeBullet(
+            bullet_id=f"FUSION-{index:03d}",
+            text="熟悉 RAG 与 Prompt 工程。",
+            fact_ids=["FACT-SKILL-001-01"],
+            primary_value=heading,
+        )
+        ability_entries.append(
+            ResumeEntry(
+                experience_id="EXP-SKILL-001", heading=heading, bullets=[bullet]
+            )
+        )
+        decisions.append(
+            FusionDecision(
+                decision_id=f"DEC-{index:03d}",
+                action=FusionAction.REWRITE_FROM_BOTH,
+                source_bullet_ids=[f"WRITER-{index:03d}", f"ASU-{index:03d}"],
+                output_bullet_id=bullet.bullet_id,
+                output_text=bullet.text,
+                fact_ids=bullet.fact_ids,
+                rationale="固定能力分类",
+            )
+        )
+    fusion = FusionArtifact(
+        schema_version="1.3",
+        run_id=packet.run_id,
+        created_at=packet.created_at,
+        source_digests=packet.source_digests,
+        sections=[
+            ResumeSection(name=ResumeSectionName.EDUCATION),
+            ResumeSection(name=ResumeSectionName.WORK),
+            ResumeSection(
+                name=ResumeSectionName.PRACTICE,
+                entries=[
+                    ResumeEntry(
+                        experience_id="EXP-PROJECT-001",
+                        heading="测试 Agent｜产品负责人｜2025/04–2025/06",
+                        bullets=[project_bullet],
+                    )
+                ],
+            ),
+            ResumeSection(name=ResumeSectionName.ABILITIES, entries=ability_entries),
+        ],
+        decisions=decisions,
+    )
+    validation = DeterministicValidationArtifact(
+        schema_version="1.3",
+        run_id=packet.run_id,
+        created_at=packet.created_at,
+        source_digests=packet.source_digests,
+        passed=True,
+        metrics=ContentMetrics(
+            chinese_character_count=100,
+            experience_bullet_count=1,
+            total_bullet_count=5,
+        ),
+    )
+    reference_research = ReferenceResearchArtifact(
+        schema_version="1.3",
+        run_id=packet.run_id,
+        created_at=packet.created_at,
+        source_digests=packet.source_digests,
+        mode=ReferenceResearchMode.DEGRADED,
+        local_card_sha256=packet.source_digests.reference_cards_sha256,
+        missing_topics=["same_role_resume_sample"],
+        degradation_approved_at=NOW,
+        degradation_approval_reason="测试夹具显式批准参考降级",
+        error="fixture has no network reference",
+    )
+    return CoordinatorRun(
+        normalized=normalized_v13,
+        state=ContentState.AUDITING,
+        jd_analysis=jd,
+        evidence_map=evidence,
+        fact_diff=fact_diff,
+        experience_selection=selection,
+        fusion_history=[fusion],
+        validation_history=[validation],
+        reference_research=reference_research,
+    )
+
+
+def hr_review(run: CoordinatorRun, *, passed: bool) -> HrReviewArtifact:
+    score = 8.5 if passed else 7.5
+    dimension = HrDecisionDimension(score=score, evidence=["招聘决策证据"])
+    reviews = [
+        HrExperienceReview(
+            experience_id=experience_id,
+            ten_second_impression="证据清晰" if passed else "证据仍过度压缩",
+            effective_requirement_ids=["REQ-001"] if experience_id != "EXP-SKILL-001" else [],
+            strengths=["事实可追溯"],
+            defects=[] if passed else ["缺少完整方法与结果链"],
+            severity_score=0 if passed else 7,
+            interview_impact=InterviewImpact.NONE if passed else InterviewImpact.MATERIAL,
+            recommended_bullet_count=1 if experience_id == "EXP-SKILL-001" else 3,
+            revision_instructions=[] if passed else ["使用现有事实展开证据链"],
+        )
+        for experience_id in ["EXP-PROJECT-001", "EXP-SKILL-001"]
+    ]
+    return HrReviewArtifact(
+        schema_version="1.3",
+        run_id=run.packet.run_id,
+        created_at=run.packet.created_at,
+        source_digests=run.packet.source_digests,
+        revision_round=0,
+        recommendation=(
+            HrRecommendation.STRONG_PUSH if passed else HrRecommendation.HESITATE
+        ),
+        overall_score=score,
+        role_fit=dimension,
+        narrative_completeness=dimension,
+        evidence_specificity=dimension,
+        decision_readiness=dimension,
+        credibility=dimension,
+        experience_reviews=reviews,
+        issue_codes=[] if passed else ["OVER_COMPRESSED_CORE_EVIDENCE"],
+        existing_fact_revision_sufficient=not passed,
+        fact_questions_required=False,
+        reselect_required=False,
+        passed=passed,
+        disposition=(
+            HrReviewDisposition.PASSED if passed else HrReviewDisposition.REVISE
+        ),
+    )
+
+
+def test_v13_passing_base_audit_requires_high_standard_hr_gate(tmp_path: Path) -> None:
+    run = v13_run_at_audit(tmp_path)
+    assert run.record_audit(passing_audit(run)) is False
+    assert run.state is ContentState.HR_REVIEWING
+    packet = run.hr_reviewer_packet(
+        {
+            "FACT-PROJECT-001-01": "完成 3 轮评测，准确率提升至 88%。",
+            "FACT-PROJECT-001-02": "完成用户调研和问答原型。",
+            "FACT-SKILL-001-01": "熟悉 RAG 与 Prompt 工程。",
+        }
+    )
+    assert packet["high_standard_gate"]["dimension_minimum"] == 8.5
+    fact_values = {
+        "FACT-PROJECT-001-01": "完成 3 轮评测，准确率提升至 88%。",
+        "FACT-PROJECT-001-02": "完成用户调研和问答原型。",
+        "FACT-SKILL-001-01": "熟悉 RAG 与 Prompt 工程。",
+    }
+    assert run.record_hr_review(hr_review(run, passed=False), fact_values) is False
+    assert run.state is ContentState.AUDITING
+
+
+def test_v13_only_strong_push_reaches_content_review(tmp_path: Path) -> None:
+    run = v13_run_at_audit(tmp_path)
+    run.record_audit(passing_audit(run))
+    assert run.record_hr_review(
+        hr_review(run, passed=True),
+        {
+            "FACT-PROJECT-001-01": "完成 3 轮评测，准确率提升至 88%。",
+            "FACT-PROJECT-001-02": "完成用户调研和问答原型。",
+            "FACT-SKILL-001-01": "熟悉 RAG 与 Prompt 工程。",
+        },
+    ) is True
+    assert run.state is ContentState.NEEDS_CONTENT_REVIEW
+
+
+def test_v13_hr_review_rejects_unknown_or_cross_experience_omitted_fact(
+    tmp_path: Path,
+) -> None:
+    run = v13_run_at_audit(tmp_path)
+    run.record_audit(passing_audit(run))
+    review = hr_review(run, passed=False)
+    tampered_reviews = [
+        item.model_copy(
+            update={"omitted_fact_ids": ["FACT-SKILL-001-01"]}
+        )
+        if item.experience_id == "EXP-PROJECT-001"
+        else item
+        for item in review.experience_reviews
+    ]
+    tampered = HrReviewArtifact.model_validate(
+        review.model_copy(update={"experience_reviews": tampered_reviews}).model_dump()
+    )
+    with pytest.raises(AgentHandoffError, match="belong to the reviewed"):
+        run.record_hr_review(
+            tampered,
+            {
+                "FACT-PROJECT-001-01": "完成 3 轮评测，准确率提升至 88%。",
+                "FACT-PROJECT-001-02": "完成用户调研和问答原型。",
+                "FACT-SKILL-001-01": "熟悉 RAG 与 Prompt 工程。",
+            },
+        )
+
+
+def test_v13_hr_missing_fact_route_stops_for_content_review(tmp_path: Path) -> None:
+    run = v13_run_at_audit(tmp_path)
+    run.record_audit(passing_audit(run))
+    review = hr_review(run, passed=False)
+    question_reviews = [
+        item.model_copy(
+            update={"missing_fact_questions": ["请确认一次真实风险处理案例。"]}
+        )
+        if item.experience_id == "EXP-PROJECT-001"
+        else item
+        for item in review.experience_reviews
+    ]
+    needs_input = HrReviewArtifact.model_validate(
+        review.model_copy(
+            update={
+                "experience_reviews": question_reviews,
+                "existing_fact_revision_sufficient": False,
+                "fact_questions_required": True,
+                "disposition": HrReviewDisposition.NEEDS_INPUT,
+            }
+        ).model_dump()
+    )
+    assert run.record_hr_review(
+        needs_input,
+        {
+            "FACT-PROJECT-001-01": "完成 3 轮评测，准确率提升至 88%。",
+            "FACT-PROJECT-001-02": "完成用户调研和问答原型。",
+            "FACT-SKILL-001-01": "熟悉 RAG 与 Prompt 工程。",
+        },
+    ) is False
+    assert run.state is ContentState.NEEDS_CONTENT_REVIEW
+
+
+def test_v13_hr_reselection_route_returns_to_human_selection_gate(
+    tmp_path: Path,
+) -> None:
+    run = v13_run_at_audit(tmp_path)
+    run.record_audit(passing_audit(run))
+    review = hr_review(run, passed=False)
+    reselect = HrReviewArtifact.model_validate(
+        review.model_copy(
+            update={
+                "existing_fact_revision_sufficient": False,
+                "reselect_required": True,
+                "disposition": HrReviewDisposition.RESELECT,
+            }
+        ).model_dump()
+    )
+    assert run.record_hr_review(
+        reselect,
+        {
+            "FACT-PROJECT-001-01": "完成 3 轮评测，准确率提升至 88%。",
+            "FACT-PROJECT-001-02": "完成用户调研和问答原型。",
+            "FACT-SKILL-001-01": "熟悉 RAG 与 Prompt 工程。",
+        },
+    ) is False
+    assert run.state is ContentState.AWAITING_SELECTION_APPROVAL
+    assert len(run.selection_revisions) == 1
+    assert run.packet.approved_experience_ids == []

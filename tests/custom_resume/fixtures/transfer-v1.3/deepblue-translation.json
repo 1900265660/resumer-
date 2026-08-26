@@ -1,0 +1,103 @@
+{
+  "case_id": "deepblue-translation-transfer-v1.3",
+  "artifact": {
+    "schema_version": "1.2",
+    "run_id": "cr_20260824T120000_abc123",
+    "created_at": "2026-08-24T12:00:00+08:00",
+    "source_digests": {
+      "jd_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "fact_snapshot_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "preferences_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "reference_cards_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    "experience_ids": ["EXP-PROJECT-009"],
+    "transfers": [
+      {
+        "transfer_id": "TR-001",
+        "experience_id": "EXP-PROJECT-009",
+        "category": "stakeholder_collaboration",
+        "fact_ids": ["FACT-PROJECT-009-02", "FACT-PROJECT-009-03"],
+        "source_action": "对接海外开发商与国内发行商，并安排本地化成员分工",
+        "target_capability": "跨职能信息同步与任务协同",
+        "requirement_ids": ["REQ-002", "REQ-003"],
+        "distance": "adjacent",
+        "confidence": "high",
+        "credit_multiplier": 0.8,
+        "writable_scope": "可写本地化项目中的跨方对接、范围拆分与成员分工；不可扩大为研发团队管理或产能规划",
+        "candidate_question_id": null
+      },
+      {
+        "transfer_id": "TR-002",
+        "experience_id": "EXP-PROJECT-009",
+        "category": "quality_risk",
+        "fact_ids": ["FACT-PROJECT-009-01", "FACT-PROJECT-009-02", "FACT-PROJECT-009-03"],
+        "source_action": "确定校对流程、提出优化建议并保障项目高质量交付",
+        "target_capability": "交付质量控制与问题闭环",
+        "requirement_ids": ["REQ-002", "REQ-005"],
+        "distance": "adjacent",
+        "confidence": "high",
+        "credit_multiplier": 0.8,
+        "writable_scope": "可写翻译校对流程、优化建议和质量交付；不可写游戏版本品质负责人或正式风险登记机制",
+        "candidate_question_id": null
+      },
+      {
+        "transfer_id": "TR-003",
+        "experience_id": "EXP-PROJECT-009",
+        "category": "planning_delivery",
+        "fact_ids": ["FACT-PROJECT-009-02", "FACT-PROJECT-009-03"],
+        "source_action": "拆分翻译范围、跟进进度并保障三个项目按时交付",
+        "target_capability": "范围拆解、进度跟踪与交付推进",
+        "requirement_ids": ["REQ-001", "REQ-002"],
+        "distance": "adjacent",
+        "confidence": "high",
+        "credit_multiplier": 0.8,
+        "writable_scope": "可写本地化项目的范围拆分、进度跟进和按时交付；不可写游戏研发版本排期或资源产能评估",
+        "candidate_question_id": null
+      },
+      {
+        "transfer_id": "TR-004",
+        "experience_id": "EXP-PROJECT-009",
+        "category": "operations_business_domain",
+        "fact_ids": [],
+        "source_action": "可能关注研发团队产能与人才梯队",
+        "target_capability": "团队产能与人才梯队优化",
+        "requirement_ids": ["REQ-004"],
+        "distance": "candidate",
+        "confidence": "low",
+        "credit_multiplier": 0.0,
+        "writable_scope": null,
+        "candidate_question_id": "Q-001"
+      }
+    ],
+    "scans": [
+      {"experience_id": "EXP-PROJECT-009", "category": "planning_delivery", "status": "supported", "transfer_ids": ["TR-003"], "rationale": "已确认范围拆分、进度跟进与按时交付"},
+      {"experience_id": "EXP-PROJECT-009", "category": "stakeholder_collaboration", "status": "supported", "transfer_ids": ["TR-001"], "rationale": "已确认跨方对接与成员分工"},
+      {"experience_id": "EXP-PROJECT-009", "category": "quality_risk", "status": "supported", "transfer_ids": ["TR-002"], "rationale": "已确认校对流程和质量交付"},
+      {"experience_id": "EXP-PROJECT-009", "category": "user_research", "status": "none", "transfer_ids": [], "rationale": "没有用户研究事实"},
+      {"experience_id": "EXP-PROJECT-009", "category": "data_analysis", "status": "none", "transfer_ids": [], "rationale": "没有数据分析事实"},
+      {"experience_id": "EXP-PROJECT-009", "category": "content_communication", "status": "none", "transfer_ids": [], "rationale": "翻译内容事实不作为本岗位独立增量链"},
+      {"experience_id": "EXP-PROJECT-009", "category": "product_technology", "status": "none", "transfer_ids": [], "rationale": "没有游戏研发产品技术事实"},
+      {"experience_id": "EXP-PROJECT-009", "category": "operations_business_domain", "status": "candidate", "transfer_ids": ["TR-004"], "rationale": "团队产能与人才梯队没有已确认事实，只保留候选问题"}
+    ]
+  },
+  "expected_supported": [
+    {
+      "experience_id": "EXP-PROJECT-009",
+      "category": "stakeholder_collaboration",
+      "fact_ids": ["FACT-PROJECT-009-02", "FACT-PROJECT-009-03"],
+      "requirement_ids": ["REQ-002", "REQ-003"]
+    },
+    {
+      "experience_id": "EXP-PROJECT-009",
+      "category": "quality_risk",
+      "fact_ids": ["FACT-PROJECT-009-02", "FACT-PROJECT-009-03"],
+      "requirement_ids": ["REQ-002", "REQ-005"]
+    },
+    {
+      "experience_id": "EXP-PROJECT-009",
+      "category": "planning_delivery",
+      "fact_ids": ["FACT-PROJECT-009-02", "FACT-PROJECT-009-03"],
+      "requirement_ids": ["REQ-001", "REQ-002"]
+    }
+  ]
+}

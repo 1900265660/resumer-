@@ -11,15 +11,19 @@ from models import (
     AgentFailureArtifact,
     AuditArtifact,
     AuditDisposition,
+    CapabilityTransferMapArtifact,
     ContentState,
     DeterministicValidationArtifact,
     DraftArtifact,
     EvidenceMapArtifact,
+    ExperienceSelectionArtifact,
     FactDiffArtifact,
     FusionArtifact,
+    HrReviewArtifact,
     JDAnalysisArtifact,
     NormalizedInputPacket,
     ReferenceResearchArtifact,
+    SelectionAuditArtifact,
 )
 from storage import RunIntegrityError, load_run
 from validators import validate_run_artifact_completeness
@@ -31,10 +35,14 @@ ARTIFACT_TYPES: dict[str, type] = {
     "evidence-map.json": EvidenceMapArtifact,
     "fact-diff.json": FactDiffArtifact,
     "reference-research.json": ReferenceResearchArtifact,
+    "capability-transfer-map.json": CapabilityTransferMapArtifact,
+    "experience-selection.json": ExperienceSelectionArtifact,
+    "selection-audit-pre.json": SelectionAuditArtifact,
     "draft-writer.json": DraftArtifact,
     "fusion.json": FusionArtifact,
     "validation.json": DeterministicValidationArtifact,
     "audit.json": AuditArtifact,
+    "hr-review.json": HrReviewArtifact,
 }
 
 
@@ -99,6 +107,10 @@ def validate_run_directory(run_dir: Path) -> dict[str, Any]:
         findings.append("input-packet.json does not match run.json input_packet")
     validation = parsed.get("validation.json")
     audit = parsed.get("audit.json")
+    hr_review = parsed.get("hr-review.json")
+    hr_ready = manifest.schema_version != "1.3" or bool(
+        hr_review is not None and hr_review.passed
+    )
     review_ready = bool(
         not findings
         and manifest.state is ContentState.NEEDS_CONTENT_REVIEW
@@ -107,6 +119,7 @@ def validate_run_directory(run_dir: Path) -> dict[str, Any]:
         and audit is not None
         and audit.disposition is AuditDisposition.PASSED
         and audit.truth.passed
+        and hr_ready
     )
     return {
         "passed": not findings,

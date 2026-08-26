@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.1",
+  "case_id": "high-metrics-affinity-vs-strong-transferable-pm",
+  "candidates": [
+    {
+      "experience_id": "EXP-PROJECT-101",
+      "fact_ids": ["FACT-PROJECT-101-01"],
+      "responsibility_score": 18,
+      "process_delivery_score": 8,
+      "result_score": 15,
+      "domain_score": 10,
+      "incremental_coverage_score": 8,
+      "evidence_strength_score": 10,
+      "job_task_evidence": "affinity_only",
+      "total_score": 54,
+      "tier": "excluded",
+      "matched_requirement_ids": ["REQ-003"],
+      "incremental_requirement_ids": [],
+      "selected": false,
+      "proposed_bullet_count": 0,
+      "rationale": "游戏数据漂亮，但没有版本排期、依赖或风险闭环动作。"
+    },
+    {
+      "experience_id": "EXP-PROJECT-102",
+      "fact_ids": ["FACT-PROJECT-102-01"],
+      "responsibility_score": 27,
+      "process_delivery_score": 18,
+      "result_score": 8,
+      "domain_score": 2,
+      "incremental_coverage_score": 12,
+      "evidence_strength_score": 9,
+      "job_task_evidence": "transferable",
+      "total_score": 76,
+      "tier": "core",
+      "matched_requirement_ids": ["REQ-001", "REQ-002"],
+      "incremental_requirement_ids": ["REQ-001", "REQ-002"],
+      "selected": true,
+      "proposed_bullet_count": 3,
+      "rationale": "行业弱相关，但直接证明计划拆解、跨团队协同和交付。"
+    }
+  ]
+}
