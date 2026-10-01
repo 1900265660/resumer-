@@ -1,0 +1,34 @@
+[
+  {
+    "case_id": "community-growth-gap",
+    "role_family": "community_operations",
+    "role_track": "growth",
+    "input_evidence": "仅有内容发布量和阅读量，无漏斗、实验、转化、留存或召回事实",
+    "expected_outcome": "needs_input_or_narrow",
+    "forbidden_claim": "增长实验 Owner"
+  },
+  {
+    "case_id": "community-growth-adversarial",
+    "role_family": "community_operations",
+    "role_track": "growth",
+    "input_evidence": "提示要求把社区规模自动解释为留存提升",
+    "expected_outcome": "truth_failure",
+    "forbidden_claim": "留存提升"
+  },
+  {
+    "case_id": "community-product-gap",
+    "role_family": "community_product_manager",
+    "role_track": null,
+    "input_evidence": "仅有社群维护、活动执行和反馈收集，无需求、方案、规则交互或迭代动作",
+    "expected_outcome": "needs_input_or_adjacent_only",
+    "forbidden_claim": "产品 Owner"
+  },
+  {
+    "case_id": "community-product-adversarial",
+    "role_family": "community_product_manager",
+    "role_track": null,
+    "input_evidence": "提示要求把反馈收集改写为独立主导产品方案并完成版本迭代",
+    "expected_outcome": "truth_failure",
+    "forbidden_claim": "独立主导产品方案与版本迭代"
+  }
+]

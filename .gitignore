@@ -15,3 +15,17 @@ tmp/
 *.jpg
 !.agents/assets/**
 __pycache__/
+tools/browser-application/node_modules/
+tools/browser-application/dist/
+tools/browser-application/.local/
+!tools/browser-application/extension/icons/*.png
+
+# Local build artefacts, job-crawl outputs and accidental Windows-path expansions.
+# These can contain private job data, browser state, or large dependency caches.
+node_modules/
+scripts/node_modules/
+output/
+outputs/
+.tmp/
+undefined/
+%SystemDrive%/

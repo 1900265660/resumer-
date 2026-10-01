@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import shutil
 import sys
 from pathlib import Path
@@ -39,6 +40,8 @@ from models import (  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures" / "evals"
 GAME_FIXTURES = Path(__file__).parent / "fixtures" / "game-production-extension"
+COMMUNITY_FIXTURES = Path(__file__).parent / "fixtures" / "community-extension"
+GAME_DESIGNER_FIXTURES = Path(__file__).parent / "fixtures" / "game-designer-extension"
 EVIDENCE = REPO_ROOT / "docs" / "custom-resume-agent" / "eval-results" / "fixed-v1"
 GAME_EVIDENCE = (
     REPO_ROOT
@@ -165,6 +168,202 @@ def test_game_extension_uses_one_sanitized_case_and_role_specific_prompts() -> N
         "writer-game-production.md",
         "capability-transfer.md",
     }
+
+
+def test_t26_community_extension_has_five_routes_and_shared_prompt_plan() -> None:
+    cases = load_cases(COMMUNITY_FIXTURES)
+    assert len(cases) == 5
+    assert {item.category for item in cases} == {
+        "community_operations_community",
+        "community_operations_content",
+        "community_operations_growth",
+        "community_operations_integrated",
+        "community_product_manager",
+    }
+    assert {item.role_track.value if item.role_track else None for item in cases} == {
+        "community",
+        "content",
+        "growth",
+        "integrated",
+        None,
+    }
+    plan = deterministic_plan(
+        COMMUNITY_FIXTURES,
+        REPO_ROOT / ".agents" / "prompts" / "campus-resume-optimizer.md",
+        REPO_ROOT / ".agents" / "skills" / "custom-resume" / "SKILL.md",
+    )
+    assert set(plan["new_prompt_sha256"]) == {
+        "asu-writer.md",
+        "auditor.md",
+        "fusion.md",
+        "jd-analysis-community.md",
+        "writer.md",
+        "capability-transfer.md",
+        "experience-selection.md",
+        "selection-audit.md",
+        "hr-reviewer.md",
+    }
+
+
+def test_t26_community_acceptance_and_boundary_fixtures_meet_release_gates() -> None:
+    cases = load_cases(COMMUNITY_FIXTURES)
+    for case in cases:
+        acceptance_path = case.jd_path.with_name("acceptance.json")
+        acceptance = json.loads(acceptance_path.read_text(encoding="utf-8"))
+        assert acceptance["truth_passed"] is True
+        assert set(acceptance["quality"]) == {
+            "jd_coverage",
+            "selection_quality",
+            "evidence_depth",
+            "hr_scan",
+            "language_naturalness",
+        }
+        assert min(acceptance["quality"].values()) >= 8
+        assert acceptance["hr"]["recommendation"] == "strong_push"
+        assert acceptance["hr"]["overall_score"] >= 8.5
+        assert acceptance["hr"]["minimum_dimension_score"] >= 8.5
+        assert len(acceptance["required_fact_ids"]) >= 2
+        assert acceptance["forbidden_inferences"]
+
+    boundary_cases = json.loads(
+        (COMMUNITY_FIXTURES / "boundary-cases.json").read_text(encoding="utf-8")
+    )
+    assert {item["case_id"] for item in boundary_cases} == {
+        "community-growth-gap",
+        "community-growth-adversarial",
+        "community-product-gap",
+        "community-product-adversarial",
+    }
+    assert {item["role_family"] for item in boundary_cases} == {
+        "community_operations",
+        "community_product_manager",
+    }
+    assert all(item["expected_outcome"] != "pass" for item in boundary_cases)
+    assert all(item["forbidden_claim"] for item in boundary_cases)
+
+
+def test_t27_game_designer_extension_has_five_directions_and_prompt_plan() -> None:
+    cases = load_cases(GAME_DESIGNER_FIXTURES)
+    assert len(cases) == 5
+    assert {item.category for item in cases} == {
+        "game_designer_system",
+        "game_designer_combat",
+        "game_designer_writing",
+        "game_designer_narrative",
+        "game_designer_general",
+    }
+    assert {item.role_track.value for item in cases if item.role_track} == {
+        "system",
+        "combat",
+        "writing",
+        "narrative",
+        "general",
+    }
+    plan = deterministic_plan(
+        GAME_DESIGNER_FIXTURES,
+        REPO_ROOT / ".agents" / "prompts" / "campus-resume-optimizer.md",
+        REPO_ROOT / ".agents" / "skills" / "custom-resume" / "SKILL.md",
+    )
+    assert set(plan["new_prompt_sha256"]) == {
+        "asu-writer-game-designer.md",
+        "auditor.md",
+        "fusion.md",
+        "jd-analysis-game-designer.md",
+        "writer-game-designer.md",
+        "capability-transfer.md",
+        "experience-selection.md",
+        "selection-audit.md",
+        "hr-reviewer.md",
+    }
+
+
+def test_t27_game_designer_acceptance_and_adversarial_fixtures_meet_gates() -> None:
+    cases = load_cases(GAME_DESIGNER_FIXTURES)
+    for case in cases:
+        acceptance = json.loads(
+            case.jd_path.with_name("acceptance.json").read_text(encoding="utf-8")
+        )
+        assert acceptance["truth_passed"] is True
+        assert min(acceptance["quality"].values()) >= 8
+        assert acceptance["hr"]["recommendation"] == "strong_push"
+        assert acceptance["hr"]["overall_score"] >= 8.5
+        assert acceptance["hr"]["minimum_dimension_score"] >= 8.5
+        assert len(acceptance["required_fact_ids"]) >= 2
+        assert acceptance["forbidden_inferences"]
+
+    boundary_cases = json.loads(
+        (GAME_DESIGNER_FIXTURES / "boundary-cases.json").read_text(encoding="utf-8")
+    )
+    assert {item["role_track"] for item in boundary_cases} == {
+        "system",
+        "combat",
+        "writing",
+        "narrative",
+        "general",
+    }
+    assert any(item["expected_outcome"] == "needs_input_or_narrow" for item in boundary_cases)
+    assert sum(item["expected_outcome"] == "truth_failure" for item in boundary_cases) == 4
+    assert all(item["forbidden_claim"] for item in boundary_cases)
+
+
+@pytest.mark.parametrize("fixtures_root", [COMMUNITY_FIXTURES, GAME_DESIGNER_FIXTURES])
+def test_t28_synthetic_extension_scorecards_exercise_blind_summary_contract(
+    fixtures_root: Path,
+) -> None:
+    fixture_cases = load_cases(fixtures_root)
+    mapping: dict[str, object] = {
+        "schema_version": "1.0",
+        "fact_snapshot_sha256": fixture_cases[0].fact_snapshot_sha256,
+        "cases": {},
+    }
+    blind_scores: list[BlindCaseEvaluation] = []
+    for case in fixture_cases:
+        acceptance = json.loads(
+            case.jd_path.with_name("acceptance.json").read_text(encoding="utf-8")
+        )
+        new_candidate = CandidateEval(
+            truth_passed=True,
+            scores=QualityScores(**acceptance["quality"]),
+        )
+        legacy_candidate = CandidateEval(
+            truth_passed=True,
+            scores=QualityScores(
+                jd_coverage=7.2,
+                selection_quality=7.0,
+                evidence_depth=7.1,
+                hr_scan=7.2,
+                language_naturalness=7.4,
+            ),
+        )
+        new_is_a = int(hashlib.sha256(case.case_id.encode()).hexdigest(), 16) % 2 == 0
+        assignment = (
+            {"candidate_a": "new", "candidate_b": "legacy"}
+            if new_is_a
+            else {"candidate_a": "legacy", "candidate_b": "new"}
+        )
+        candidates = {"new": new_candidate, "legacy": legacy_candidate}
+        blind_scores.append(
+            BlindCaseEvaluation(
+                case_id=case.case_id,
+                fact_snapshot_sha256=case.fact_snapshot_sha256,
+                candidate_a=candidates[assignment["candidate_a"]],
+                candidate_b=candidates[assignment["candidate_b"]],
+                evaluator_notes=[
+                    "Synthetic contract fixture: candidate labels contain no role-strategy or lane identity."
+                ],
+            )
+        )
+        mapping["cases"][case.case_id] = {
+            "assignment": assignment,
+            "deterministic_findings": {"legacy": [], "new": []},
+        }
+
+    unblinded = unblind_evaluations(blind_scores, mapping)
+    summary = summarize_suite(unblinded, fixture_cases)
+    assert summary.passed is True
+    assert summary.truth_gate_passed is True
+    assert summary.quality_gate_passed is True
+    assert len(summary.improved_dimensions) == 5
 
 
 def test_eval_suite_rejects_unknown_role_category(tmp_path: Path) -> None:

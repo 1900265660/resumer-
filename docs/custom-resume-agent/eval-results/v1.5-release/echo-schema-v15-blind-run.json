@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.5",
+  "run_id": "cr_20260903T084342_da977c",
+  "application": "回响科技_社区运营_7478600356101474611",
+  "role_route": "community_operations/content",
+  "state": "ready_for_user_review",
+  "generation_round": 1,
+  "selected_experiences": [
+    {"experience_id": "EXP-PROJECT-011", "bullet_count": 3},
+    {"experience_id": "EXP-WORK-004", "bullet_count": 2},
+    {"experience_id": "EXP-WORK-001", "bullet_count": 3}
+  ],
+  "first_post_draft_audit": {
+    "passed": false,
+    "rewrite_target": "writers",
+    "issue_codes": ["DRAFT_QUALITY_GATE_FAILED", "writer", "asu_writer"]
+  },
+  "revised_post_draft_audit": {
+    "passed": true,
+    "writer_min_dimension": 8.4,
+    "asu_writer_min_dimension": 8.8
+  },
+  "deterministic_quality_gate": {
+    "passed": true,
+    "hard_failures": [],
+    "warnings": [],
+    "chinese_character_count": 862,
+    "experience_bullet_count": 8,
+    "total_bullet_count": 14
+  },
+  "post_fusion_audit": {
+    "passed": true,
+    "jd_coverage": 9.1,
+    "selection_quality": 9.3,
+    "evidence_depth": 9.4,
+    "hr_scan": 8.7,
+    "language_naturalness": 8.6
+  },
+  "hr_review": {
+    "passed": true,
+    "recommendation": "strong_push",
+    "overall_score": 9.1,
+    "role_fit": 9.3,
+    "narrative_completeness": 9.0,
+    "evidence_specificity": 9.4,
+    "decision_readiness": 9.0,
+    "credibility": 9.2
+  },
+  "user_content_approved": false,
+  "current_updated": false,
+  "pdf_generated": false,
+  "submission_started": false
+}

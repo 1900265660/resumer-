@@ -1,0 +1,108 @@
+{
+  "case_id": "echotech-user-rejected-overcompressed",
+  "role_route": "community_operations/content",
+  "rejected_run_id": "cr_20260901T020649_echoct",
+  "user_accepted": false,
+  "completion_benchmark": {
+    "title": "最新定稿游戏编剧简历",
+    "content_sha256": "a4e5347793b527dd775f3bd7f2c72628abce7f30e76cec72cb595d8a7d13ede1",
+    "allowed_uses": [
+      "structure",
+      "evidence allocation",
+      "capability labels",
+      "bullet granularity",
+      "completion judgment"
+    ],
+    "fact_source": false,
+    "selection_approval": false
+  },
+  "rejected_content_metrics": {
+    "chinese_character_count": 687,
+    "experience_bullet_count": 9,
+    "reference_target_chinese_characters": 1200,
+    "reference_target_experience_bullets": 10,
+    "below_both_reference_targets": true
+  },
+  "old_hr_review": {
+    "recommendation": "strong_push",
+    "overall_score": 9.0,
+    "passed": true,
+    "invalidated_by_user_acceptance": true
+  },
+  "selected_fact_ids_before_fix": {
+    "EXP-WORK-001": [
+      "FACT-WORK-001-01",
+      "FACT-WORK-001-02",
+      "FACT-WORK-001-04"
+    ],
+    "EXP-WORK-004": [
+      "FACT-WORK-004-01",
+      "FACT-WORK-004-02",
+      "FACT-WORK-004-03"
+    ],
+    "EXP-PROJECT-011": [
+      "FACT-PROJECT-011-01",
+      "FACT-PROJECT-011-02",
+      "FACT-PROJECT-011-03",
+      "FACT-PROJECT-011-04"
+    ],
+    "EXP-PROJECT-012": [
+      "FACT-PROJECT-012-01"
+    ]
+  },
+  "complete_selected_fact_ids_after_fix": {
+    "EXP-WORK-001": [
+      "FACT-WORK-001-01",
+      "FACT-WORK-001-02",
+      "FACT-WORK-001-03",
+      "FACT-WORK-001-04",
+      "FACT-WORK-001-05"
+    ],
+    "EXP-WORK-004": [
+      "FACT-WORK-004-01",
+      "FACT-WORK-004-02",
+      "FACT-WORK-004-03"
+    ],
+    "EXP-PROJECT-011": [
+      "FACT-PROJECT-011-01",
+      "FACT-PROJECT-011-02",
+      "FACT-PROJECT-011-03",
+      "FACT-PROJECT-011-04"
+    ],
+    "EXP-PROJECT-012": [
+      "FACT-PROJECT-012-01"
+    ]
+  },
+  "cited_fact_ids_in_rejected_content": [
+    "FACT-WORK-001-01",
+    "FACT-WORK-001-02",
+    "FACT-WORK-001-04",
+    "FACT-WORK-004-01",
+    "FACT-WORK-004-02",
+    "FACT-PROJECT-011-01",
+    "FACT-PROJECT-011-02",
+    "FACT-PROJECT-011-03",
+    "FACT-PROJECT-011-04",
+    "FACT-PROJECT-012-01"
+  ],
+  "expected_pre_hidden_fact_ids": [
+    "FACT-WORK-001-03",
+    "FACT-WORK-001-05"
+  ],
+  "expected_uncited_fact_ids_after_complete_exposure": [
+    "FACT-WORK-001-03",
+    "FACT-WORK-001-05",
+    "FACT-WORK-004-03"
+  ],
+  "expected_gate": {
+    "selection_with_pre_hidden_facts_passed": false,
+    "hr_passed": false,
+    "recommendation_must_not_be": "strong_push",
+    "required_disposition_for_uncited_facts": "should_include",
+    "issue_codes": [
+      "PRE_HIDDEN_SELECTED_FACTS",
+      "HIGH_VALUE_CONFIRMED_FACTS_OMITTED",
+      "OVER_COMPRESSED_CORE_EVIDENCE"
+    ]
+  }
+}

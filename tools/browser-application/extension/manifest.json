@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Codex 网申填写助手",
+  "version": "1.2.0",
+  "description": "由本机 Codex 接入批准材料，填写网申并在用户确认后提交",
+  "minimum_chrome_version": "114",
+  "permissions": [
+    "storage",
+    "scripting",
+    "sidePanel"
+  ],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "action": {
+    "default_icon": {
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "128": "icons/icon128.png"
+  },
+  "side_panel": {
+    "default_path": "codex-panel.html"
+  },
+  "background": {
+    "service_worker": "codex-background.js"
+  }
+}

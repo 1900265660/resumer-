@@ -48,16 +48,20 @@ from models import (  # noqa: E402
     QualityDimension,
     QuestionStatus,
     ResumeSection,
+    ResumeEntry,
+    ResumeBullet,
     ResumeSectionName,
     PortfolioValue,
     SectionBalanceOverride,
     TransferConfidence,
     TransferDistance,
     RoleFamily,
+    RoleTrack,
     SourceDigests,
     SourceType,
     assert_state_transition,
     export_json_schemas,
+    self_ability_headings_for_role,
 )
 
 
@@ -87,6 +91,14 @@ def artifact_base() -> dict[str, object]:
 
 def artifact_base_v12() -> dict[str, object]:
     return {**artifact_base(), "schema_version": "1.2"}
+
+
+def artifact_base_v14() -> dict[str, object]:
+    return {**artifact_base(), "schema_version": "1.4"}
+
+
+def artifact_base_v15() -> dict[str, object]:
+    return {**artifact_base(), "schema_version": "1.5"}
 
 
 def empty_sections() -> list[ResumeSection]:
@@ -126,9 +138,161 @@ def test_role_family_defaults_to_ai_and_accepts_game_production() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("role_family", "role_track"),
+    [
+        (RoleFamily.AI_PRODUCT_MANAGER, None),
+        (RoleFamily.GAME_PRODUCTION_PM, None),
+        (RoleFamily.COMMUNITY_OPERATIONS, RoleTrack.COMMUNITY),
+        (RoleFamily.COMMUNITY_OPERATIONS, RoleTrack.CONTENT),
+        (RoleFamily.COMMUNITY_OPERATIONS, RoleTrack.GROWTH),
+        (RoleFamily.COMMUNITY_OPERATIONS, RoleTrack.INTEGRATED),
+        (RoleFamily.COMMUNITY_PRODUCT_MANAGER, None),
+        (RoleFamily.GAME_DESIGNER, RoleTrack.SYSTEM),
+        (RoleFamily.GAME_DESIGNER, RoleTrack.COMBAT),
+        (RoleFamily.GAME_DESIGNER, RoleTrack.WRITING),
+        (RoleFamily.GAME_DESIGNER, RoleTrack.NARRATIVE),
+        (RoleFamily.GAME_DESIGNER, RoleTrack.GENERAL),
+    ],
+)
+def test_schema_v14_accepts_only_documented_role_routes(
+    role_family: RoleFamily, role_track: RoleTrack | None
+) -> None:
+    packet = NormalizedInputPacket(
+        **artifact_base_v14(),
+        application_dir="applications/测试_岗位",
+        source_type=SourceType.TEXT,
+        source_locator="inline:text",
+        role_family=role_family,
+        role_track=role_track,
+    )
+    assert packet.role_family is role_family
+    assert packet.role_track is role_track
+
+
+@pytest.mark.parametrize(
+    ("role_family", "role_track", "message"),
+    [
+        (RoleFamily.COMMUNITY_OPERATIONS, None, "requires role_track"),
+        (RoleFamily.GAME_DESIGNER, None, "requires role_track"),
+        (RoleFamily.COMMUNITY_OPERATIONS, RoleTrack.SYSTEM, "invalid role_track"),
+        (RoleFamily.GAME_DESIGNER, RoleTrack.CONTENT, "invalid role_track"),
+        (RoleFamily.AI_PRODUCT_MANAGER, RoleTrack.CONTENT, "must not define"),
+        (RoleFamily.COMMUNITY_PRODUCT_MANAGER, RoleTrack.COMMUNITY, "must not define"),
+    ],
+)
+def test_schema_v14_rejects_invalid_role_routes(
+    role_family: RoleFamily,
+    role_track: RoleTrack | None,
+    message: str,
+) -> None:
+    with pytest.raises(ValidationError, match=message):
+        NormalizedInputPacket(
+            **artifact_base_v14(),
+            application_dir="applications/测试_岗位",
+            source_type=SourceType.TEXT,
+            source_locator="inline:text",
+            role_family=role_family,
+            role_track=role_track,
+        )
+
+
+def test_schema_v14_requires_explicit_role_family() -> None:
+    with pytest.raises(ValidationError, match="requires explicit role_family"):
+        NormalizedInputPacket(
+            **artifact_base_v14(),
+            application_dir="applications/测试_AI产品经理",
+            source_type=SourceType.TEXT,
+            source_locator="inline:text",
+        )
+
+
+@pytest.mark.parametrize(
+    ("role_family", "expected_headings"),
+    [
+        (RoleFamily.AI_PRODUCT_MANAGER, ("专业硬技能", "综合软技能", "个人优势")),
+        (RoleFamily.GAME_PRODUCTION_PM, ("专业硬技能", "综合软技能", "游戏经历", "语言能力")),
+        (RoleFamily.COMMUNITY_OPERATIONS, ("专业硬技能", "综合软技能", "行业/平台经历", "语言能力")),
+        (RoleFamily.COMMUNITY_PRODUCT_MANAGER, ("专业硬技能", "综合软技能", "行业/平台经历", "语言能力")),
+        (RoleFamily.GAME_DESIGNER, ("专业硬技能", "综合软技能", "游戏经历", "语言能力")),
+    ],
+)
+def test_self_ability_headings_are_derived_from_role_family(
+    role_family: RoleFamily, expected_headings: tuple[str, ...]
+) -> None:
+    assert self_ability_headings_for_role(role_family) == expected_headings
+
+
+def test_schema_v14_ai_product_keeps_historical_ability_headings() -> None:
+    assert self_ability_headings_for_role(
+        RoleFamily.AI_PRODUCT_MANAGER, "1.4"
+    ) == ("专业硬技能", "综合软技能", "游戏经历", "语言能力")
+
+
+def test_schema_v15_ai_product_draft_accepts_three_ability_headings() -> None:
+    abilities = ResumeSection(
+        name=ResumeSectionName.ABILITIES,
+        entries=[
+            ResumeEntry(
+                experience_id="EXP-SKILL-001",
+                heading=heading,
+                bullets=[
+                    ResumeBullet(
+                        bullet_id=f"WRITER-{index:03d}",
+                        text=f"{heading}有已确认事实支持。",
+                        fact_ids=["FACT-SKILL-001-01"],
+                        primary_value=heading,
+                    )
+                ],
+            )
+            for index, heading in enumerate(
+                ("专业硬技能", "综合软技能", "个人优势"), start=1
+            )
+        ],
+    )
+    draft = DraftArtifact(
+        **artifact_base_v15(),
+        role_family=RoleFamily.AI_PRODUCT_MANAGER,
+        agent=DraftAgent.WRITER,
+        sections=[
+            ResumeSection(name=ResumeSectionName.EDUCATION),
+            ResumeSection(name=ResumeSectionName.WORK),
+            ResumeSection(name=ResumeSectionName.PRACTICE),
+            abilities,
+        ],
+    )
+    assert [entry.heading for entry in draft.sections[-1].entries] == [
+        "专业硬技能",
+        "综合软技能",
+        "个人优势",
+    ]
+
+
+def test_legacy_schemas_reject_v15_roles_and_tracks() -> None:
+    with pytest.raises(ValidationError, match="new role families require schema 1.4"):
+        NormalizedInputPacket(
+            **artifact_base(),
+            application_dir="applications/测试_社区运营",
+            source_type=SourceType.TEXT,
+            source_locator="inline:text",
+            role_family=RoleFamily.COMMUNITY_OPERATIONS,
+            role_track=RoleTrack.CONTENT,
+        )
+    with pytest.raises(ValidationError, match="role_track is available only"):
+        NormalizedInputPacket(
+            **artifact_base(),
+            application_dir="applications/测试_AI产品经理",
+            source_type=SourceType.TEXT,
+            source_locator="inline:text",
+            role_track=RoleTrack.CONTENT,
+        )
+
+
 def test_state_machine_accepts_only_documented_transitions() -> None:
     assert_state_transition(ContentState.NOT_STARTED, ContentState.ANALYZING)
     assert_state_transition(ContentState.NEEDS_CONTENT_REVIEW, ContentState.APPROVED)
+    assert_state_transition(ContentState.HR_REVIEWING, ContentState.READY_FOR_USER_REVIEW)
+    assert_state_transition(ContentState.READY_FOR_USER_REVIEW, ContentState.APPROVED)
     assert_state_transition(ContentState.APPROVED, ContentState.STALE)
 
     with pytest.raises(InvalidStateTransition, match="not_started -> approved"):
@@ -282,6 +446,52 @@ def test_draft_requires_exact_section_order() -> None:
         )
 
 
+def test_schema_v14_draft_requires_and_validates_explicit_role_route() -> None:
+    abilities = ResumeSection(
+        name=ResumeSectionName.ABILITIES,
+        entries=[
+            ResumeEntry(
+                experience_id="EXP-SKILL-001",
+                heading=heading,
+                bullets=[
+                    ResumeBullet(
+                        bullet_id=f"WRITER-{index:03d}",
+                        text=heading,
+                        fact_ids=["FACT-SKILL-001-01"],
+                        primary_value=heading,
+                    )
+                ],
+            )
+            for index, heading in enumerate(
+                ["专业硬技能", "综合软技能", "行业/平台经历", "语言能力"],
+                start=1,
+            )
+        ],
+    )
+    sections = [
+        ResumeSection(name=ResumeSectionName.EDUCATION),
+        ResumeSection(name=ResumeSectionName.WORK),
+        ResumeSection(name=ResumeSectionName.PRACTICE),
+        abilities,
+    ]
+    with pytest.raises(ValidationError, match="requires explicit role_family"):
+        DraftArtifact(
+            **artifact_base_v14(),
+            agent=DraftAgent.WRITER,
+            sections=sections,
+        )
+
+    draft = DraftArtifact(
+        **artifact_base_v14(),
+        role_family=RoleFamily.COMMUNITY_OPERATIONS,
+        role_track=RoleTrack.CONTENT,
+        agent=DraftAgent.WRITER,
+        sections=sections,
+    )
+    assert draft.role_family is RoleFamily.COMMUNITY_OPERATIONS
+    assert draft.role_track is RoleTrack.CONTENT
+
+
 def test_fusion_drop_and_output_shapes_are_mutually_exclusive() -> None:
     drop = FusionDecision(
         decision_id="DEC-001",
@@ -305,7 +515,7 @@ def test_fusion_drop_and_output_shapes_are_mutually_exclusive() -> None:
 
 def test_schema_export_produces_valid_json_for_all_artifacts(tmp_path: Path) -> None:
     written = export_json_schemas(tmp_path)
-    assert len(written) == 17
+    assert len(written) == 24
     assert {path.name for path in written} == {
         "input-packet.schema.json",
         "run.schema.json",
@@ -313,17 +523,24 @@ def test_schema_export_produces_valid_json_for_all_artifacts(tmp_path: Path) -> 
         "evidence-map.schema.json",
         "capability-transfer-map.schema.json",
         "experience-selection.schema.json",
+        "story-plan.schema.json",
+        "selection-approval.schema.json",
         "selection-audit.schema.json",
         "fact-diff.schema.json",
         "draft.schema.json",
+        "draft-quality-audit.schema.json",
         "fusion.schema.json",
         "audit.schema.json",
         "hr-review.schema.json",
         "current.schema.json",
         "agent-failure.schema.json",
+        "agent-receipts.schema.json",
         "validation.schema.json",
+        "quality-gate.schema.json",
         "reference-research.schema.json",
         "run-checkpoint.schema.json",
+        "user-approval.schema.json",
+        "run-status.schema.json",
     }
     for path in written:
         schema = json.loads(path.read_text(encoding="utf-8"))

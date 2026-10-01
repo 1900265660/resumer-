@@ -1,7 +1,7 @@
 # 定制简历 Agent 开发规范
 
-> 状态：已确认
-> 版本：0.4
+> 状态：V1.5 文档已确认，T25–T27 已实现，T28 发布验收进行中
+> 版本：0.5
 > 适用范围：`custom-resume` 模块的文档、Skill、子代理、Prompt、验证脚本和测试
 
 ## 1. 标准流程
@@ -50,7 +50,7 @@ Understand → Inspect → Plan → Implement → Test → Review
 
 ## 2. 阶段门禁
 
-1. 产品文档未由用户确认前，只允许修改 `docs/custom-resume-agent/`、必要的文档入口和隐私规则。
+1. 产品范围已确认但 V1.5 文档未由用户验收前，只允许修改 `docs/custom-resume-agent/`、必要的文档入口和隐私规则。
 2. 文档确认后，按 `TASKS.md` 一次实现一个任务。
 3. 事实 ID 迁移必须先产生预览 diff，用户确认后才能写事实库。
 4. 固定回归未通过前，旧优化器保持可用且不得删除。
@@ -63,6 +63,7 @@ Understand → Inspect → Plan → Implement → Test → Review
 - 不重构 PDF、浏览器投递、Offer、Contributor 或模板系统。
 - 不引入常驻服务、数据库、外部模型 Provider 或前端 UI。
 - 不把原始外部简历、真实岗位申请或候选人敏感资料加入 Git。
+- 私有模范简历只能写入已忽略的 `profile/resume-exemplars/`；代码和测试不得硬编码候选人姓名、联系方式或真实快照正文。
 - 不硬编码当前本机路径、模型名、用户身份或联系方式。
 
 ## 4. 依赖政策
@@ -79,18 +80,30 @@ Understand → Inspect → Plan → Implement → Test → Review
 - 长 Prompt 存放在 `.agents/prompts/custom-resume/`，不得硬编码进 Python。
 - Prompt 只能要求结构化输出；不得依赖从自然语言报告反向解析状态。
 - Writer、ASu Writer 和 Auditor Prompt 不得互相复制草稿或泄漏预期答案。
+- 双稿完成后必须启动全新的只读草稿质量 Auditor；它逐稿逐经历检查展开度、成果背书、信息密度和自然扫读，未通过时 `record_fusion` 必须拒绝继续。
 - HR Reviewer 必须是全新只读调用，不得由 Writer、融合器或基础 Auditor 复用上下文自证质量。
-- Schema 1.3 运行只有在 `hr-review.json` 推荐 `strong_push` 且总分、五维均达到 8.5 后才允许内容批准。
+- Schema 1.5 只有在确定性质量门、字符型内容充实度门禁、独立 Auditor、匹配调用回执和 `hr-review.json` 同时有效，HR 推荐 `strong_push`、总分达到 9.0、六维均达到 8.0 且引用实际 bullet 后，才可进入用户审阅；最终批准还需要用户对内容哈希的明确批准记录。
 - HR 意见修订后必须重跑确定性校验、基础 Auditor 和全新的 HR Reviewer；缺少事实时只生成问题，不得用行业常识扩写。
 - Prompt 修改必须运行至少一个正向、一个事实缺口和一个对抗用例。
 - 能力迁移 Prompt 必须同时输出源事实、源动作、目标能力、迁移距离和可写边界；禁止只输出无证据的能力标签。
 - “发散能力”和“生成简历事实”必须是两个阶段：合理但未经确认的流程只能进入 `candidate` 问题，不能进入打分或 Writer 输入。
 - 选材 Prompt 必须分别输出岗位匹配与组合价值，不能让 LLM 自行合成最终总分；分项和距离系数由代码复算。
+- 写作、融合和审计 Prompt 必须区分整稿叙事、经历完整性和单条要点：整稿检查统一岗位定位，核心经历整体检查问题/情境—个人行动—方法或决策—可信结果—个人边界，不要求每条要点机械套模板。
+- 所有候选 WORK/PROJECT（包括未入选项）的全部已确认事实必须进入评分与独立选材 Auditor；协调器以代码拒绝任一候选经历的事实子集，防止低估被遗漏经历的机会成本。入选经历的同一完整事实集继续进入 Story Plan、Writer、Auditor 与 HR。
+- 1,200 字/10 条只作为完成度诊断；低于两线时 Prompt 必须逐经历对照完整事实集并解释未用高价值事实。能力前置标签与内部审计标签必须分别判断，不能一概删除。
+- JD 关键词必须由事实支持的工作/项目实际细节支撑。
+- 角色专用 Prompt 必须读取规范化 `role_family` 和条件性 `role_track`，不得从岗位标题字符串自行覆盖已确认路由。
+- 新角色优先共享通用 Writer、Fusion、Auditor 和 HR Reviewer 契约，通过按需加载的 `role_content_guidance` 提供方向判断；只有输入/输出或推理任务确实不同才新增独立 Prompt，避免复制整套流程。
+- 社区/内容/增长运营、社区产品和游戏策划方向之间必须保留所有权边界；每次相关 Prompt 修改都要增加方向混淆断言。
 
 ## 6. Schema 与兼容政策
 
 - 所有 JSON 包含 `schema_version`。
-- V1.4 新产物默认使用 Schema `1.3`；加载器继续只读接受 `1.0`–`1.2` 历史运行，绝不原地迁移或覆盖历史产物。
+- 新产物使用 Schema `1.5`；加载器继续只读接受 `1.0`–`1.4` 历史运行，绝不原地迁移或覆盖历史产物，官方入口拒绝旧版本产生新批准。
+- Schema 1.5 的 `role_track` 是条件字段：社区运营和游戏策划必须填写合法方向，其他角色族必须为空。兼容加载器不得把旧产物反向补写为 1.5。
+- 官方状态变更只通过 `scripts/custom_resume_cli.py`。直接写 Markdown、`run.json`、HR 分数或 `current.json` 不构成有效运行。
+- 每次代理输出必须有匹配的 `AgentInvocationReceipt`；审批时复验 prompt、input、output 和最终内容哈希。
+- 改动公共模型后运行 `models.py --export-dir schemas`，并逐文件比较导出结果，禁止手改 Schema 与模型分叉。
 - Pydantic 模型是 JSON 结构的代码级来源，`ARCHITECTURE.md` 记录公共语义。
 - 未知字段默认拒绝，避免 LLM 静默发明接口。
 - 状态、枚举和文件名不得仅在 Prompt 中定义。
@@ -107,6 +120,10 @@ python -m compileall .agents/skills/custom-resume/scripts tests/custom_resume
 涉及 Skill 元数据时还需运行 Skill Creator 的 `quick_validate.py`。涉及运行产物时运行 `validate_run.py`。
 
 能力迁移和组合选材变更还必须运行深蓝定向回归，验证“翻译跨方协作/质量/交付被发现”和“未经确认的人员分工不进入正文”同时成立；只验证其中一项不能视为通过。
+
+模范简历路由变更必须覆盖：相似岗位命中、不相似岗位不命中、角色族隔离、内容篡改拒绝、无模范库兼容，以及 Writer/选材审计包的非事实边界。
+
+V1.5 角色扩展还必须覆盖完整路由矩阵、条件性方向、角色指南选择、跨方向模范简历拒绝、动态自我能力第三项，以及每个新增角色族至少一个正向、事实缺口和对抗用例。游戏策划五方向必须各有独立正向回归。另需覆盖“任一候选经历预隐藏事实”确定性拒绝、短而真实但证据损失的 HR 负例、能力前置标签可用与审计微标签禁用。
 
 ### Lint 和类型检查
 
@@ -141,8 +158,22 @@ python -m compileall .agents/skills/custom-resume/scripts tests/custom_resume
 6. 失败和降级行为已验证；
 7. 能力迁移回归同时达到迁移召回 100% 和可写迁移精度 100%；
 8. 教育锁定、能力分类、同类项目上限、工作板块与例外均通过确定性测试；
-9. 未验证部分被明确记录；
-10. 输出最终报告并停止，不自动开始下一 Task。
+9. 涉及角色扩展时，合法路由、方向隔离、模范简历隔离和相邻能力不越权均通过回归；
+10. 未验证部分被明确记录；
+11. 输出最终报告并停止，不自动开始下一 Task。
+
+成品复用上游的完成定义另包括：基线库保持 Git 忽略；事实库或源文件变化会失效；工作簿重建保留具体岗位和人工状态；轻调 HR 通过不写 `manifest.resume_content.approved`；待重写批次获批前没有 Writer/ASu Writer 调用。
+
+快速装配开发与验收命令：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .agents/skills/china-job-search/scripts/setup_rendercv.ps1
+python -m pytest -q tests/test_fast_resume.py tests/test_resume_baseline.py
+python -m compileall .agents/skills/china-job-search/scripts tests
+node scripts/update_job_resume_workbook.mjs --self-test
+```
+
+旧简历扫描只生成 `fact-diff` 报告，不写事实库；`apply-writer` 只能运行一次；日常 PDF 只跑结构、文本层、联系方式、乱码、禁用字段和页数检查，异常时才生成 PNG。
 
 ## 10. 最终报告格式
 

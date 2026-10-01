@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from models import (
     AgentFailureArtifact,
+    AgentReceiptBundleArtifact,
     AuditArtifact,
     AuditDisposition,
     CapabilityTransferMapArtifact,
@@ -23,9 +24,11 @@ from models import (
     JDAnalysisArtifact,
     NormalizedInputPacket,
     ReferenceResearchArtifact,
+    SelectionApprovalArtifact,
     SelectionAuditArtifact,
+    StoryPlanArtifact,
 )
-from storage import RunIntegrityError, load_run
+from storage import RunIntegrityError, latest_run_status, load_run
 from validators import validate_run_artifact_completeness
 
 
@@ -38,11 +41,15 @@ ARTIFACT_TYPES: dict[str, type] = {
     "capability-transfer-map.json": CapabilityTransferMapArtifact,
     "experience-selection.json": ExperienceSelectionArtifact,
     "selection-audit-pre.json": SelectionAuditArtifact,
+    "selection-user-approval.json": SelectionApprovalArtifact,
+    "story-plan.json": StoryPlanArtifact,
     "draft-writer.json": DraftArtifact,
     "fusion.json": FusionArtifact,
     "validation.json": DeterministicValidationArtifact,
+    "quality-gate.json": DeterministicValidationArtifact,
     "audit.json": AuditArtifact,
     "hr-review.json": HrReviewArtifact,
+    "agent-receipts.json": AgentReceiptBundleArtifact,
 }
 
 
@@ -76,6 +83,16 @@ def validate_run_directory(run_dir: Path) -> dict[str, Any]:
     findings.extend(
         item.message for item in validate_run_artifact_completeness(run_dir)
     )
+    status = latest_run_status(application_dir, manifest.run_id)
+    if status and status.status.value in {
+        "superseded",
+        "user_rejected",
+        "schema_invalid",
+        "revoked",
+    }:
+        findings.append(
+            f"run is blocked by status ledger: {status.status.value}/{status.reason_code}"
+        )
     parsed: dict[str, Any] = {}
     for filename, model in ARTIFACT_TYPES.items():
         path = run_dir / filename
@@ -108,8 +125,13 @@ def validate_run_directory(run_dir: Path) -> dict[str, Any]:
     validation = parsed.get("validation.json")
     audit = parsed.get("audit.json")
     hr_review = parsed.get("hr-review.json")
-    hr_ready = manifest.schema_version != "1.3" or bool(
+    hr_ready = manifest.schema_version not in {"1.3", "1.4", "1.5"} or bool(
         hr_review is not None and hr_review.passed
+    )
+    v15_ready = manifest.schema_version != "1.5" or bool(
+        parsed.get("story-plan.json") is not None
+        and parsed.get("selection-user-approval.json") is not None
+        and parsed.get("agent-receipts.json") is not None
     )
     review_ready = bool(
         not findings
@@ -120,6 +142,7 @@ def validate_run_directory(run_dir: Path) -> dict[str, Any]:
         and audit.disposition is AuditDisposition.PASSED
         and audit.truth.passed
         and hr_ready
+        and v15_ready
     )
     return {
         "passed": not findings,

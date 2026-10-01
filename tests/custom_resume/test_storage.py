@@ -156,6 +156,25 @@ def commit_approved_run(application: Path, run_id: str = RUN_ID) -> Path:
     return stage.commit(manifest)
 
 
+def seed_legacy_approved_pointer(
+    application: Path, fact_value: str = "引用值"
+) -> None:
+    """Represent an approval that existed before Schema 1.5 became mandatory."""
+    transaction_id = "approval_" + "a" * 32
+    pointer, job_manifest = storage._approval_payloads(
+        application.resolve(),
+        RUN_ID,
+        {"FACT-PROJECT-001-01": fact_value},
+        NOW,
+        transaction_id,
+    )
+    storage._replace_json(
+        application / "resume-content" / "current.json",
+        pointer.model_dump(mode="json"),
+    )
+    storage._replace_json(application / "manifest.json", job_manifest)
+
+
 def test_run_id_is_validated_and_repeatable_for_tests() -> None:
     assert create_run_id(NOW, "abc123") == RUN_ID
     with pytest.raises(storage.StorageError, match="invalid generated run ID"):
@@ -198,29 +217,28 @@ def test_committed_artifact_hash_is_verified(tmp_path: Path) -> None:
         load_run(application, RUN_ID)
 
 
-def test_approval_pointer_preserves_application_state(tmp_path: Path) -> None:
+def test_legacy_run_cannot_create_new_approval_pointer(tmp_path: Path) -> None:
     application = create_application(tmp_path)
     commit_approved_run(application)
-    pointer = approve_run(
-        application,
-        RUN_ID,
-        {"FACT-PROJECT-001-01": "已确认事实"},
-        approved_at=NOW,
-    )
-    validated = validate_pointer_consistency(application)
-    job_manifest = json.loads((application / "manifest.json").read_text(encoding="utf-8"))
-
-    assert validated == pointer
-    assert job_manifest["status"] == "analyzed"
-    assert job_manifest["resume_content"]["status"] == "approved"
+    with pytest.raises(StorageError, match="schema 1.5"):
+        approve_run(
+            application,
+            RUN_ID,
+            {"FACT-PROJECT-001-01": "已确认事实"},
+            approved_at=NOW,
+        )
+    assert not (application / "resume-content" / "current.json").exists()
 
 
-def test_schema_v13_approval_requires_passing_hr_decision_gate(tmp_path: Path) -> None:
+@pytest.mark.parametrize("schema_version", ["1.3", "1.4"])
+def test_schema_v13_plus_approval_requires_passing_hr_decision_gate(
+    tmp_path: Path, schema_version: str
+) -> None:
     application = create_application(tmp_path)
     stage = begin_run(application, RUN_ID)
     dimension = QualityDimension(score=8.5, evidence=["基础审计通过"])
     audit = AuditArtifact(
-        schema_version="1.3",
+        schema_version=schema_version,
         run_id=RUN_ID,
         created_at=NOW,
         source_digests=digests(),
@@ -238,7 +256,7 @@ def test_schema_v13_approval_requires_passing_hr_decision_gate(tmp_path: Path) -
     )
     weak = HrDecisionDimension(score=7.5, evidence=["招聘证据过度压缩"])
     review = HrReviewArtifact(
-        schema_version="1.3",
+        schema_version=schema_version,
         run_id=RUN_ID,
         created_at=NOW,
         source_digests=digests(),
@@ -270,9 +288,9 @@ def test_schema_v13_approval_requires_passing_hr_decision_gate(tmp_path: Path) -
     )
     stage.write_model("audit.json", audit)
     stage.write_model("hr-review.json", review)
-    packet = input_packet().model_copy(update={"schema_version": "1.3"})
+    packet = input_packet().model_copy(update={"schema_version": schema_version})
     manifest = RunManifestArtifact(
-        schema_version="1.3",
+        schema_version=schema_version,
         run_id=RUN_ID,
         created_at=NOW,
         source_digests=digests(),
@@ -328,12 +346,7 @@ def test_schema_v13_approval_rejects_mismatched_hr_review_envelope(
 def test_only_referenced_fact_changes_mark_current_stale(tmp_path: Path) -> None:
     application = create_application(tmp_path)
     commit_approved_run(application)
-    approve_run(
-        application,
-        RUN_ID,
-        {"FACT-PROJECT-001-01": "引用值"},
-        approved_at=NOW,
-    )
+    seed_legacy_approved_pointer(application)
 
     unrelated = {
         "FACT-PROJECT-001-01": "引用值",
@@ -353,12 +366,7 @@ def test_only_referenced_fact_changes_mark_current_stale(tmp_path: Path) -> None
 def test_pointer_manifest_disagreement_is_rejected(tmp_path: Path) -> None:
     application = create_application(tmp_path)
     commit_approved_run(application)
-    approve_run(
-        application,
-        RUN_ID,
-        {"FACT-PROJECT-001-01": "引用值"},
-        approved_at=NOW,
-    )
+    seed_legacy_approved_pointer(application)
     manifest_path = application / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["resume_content"]["transaction_id"] = f"approval_{'0' * 32}"
@@ -368,30 +376,27 @@ def test_pointer_manifest_disagreement_is_rejected(tmp_path: Path) -> None:
         validate_pointer_consistency(application)
 
 
-def test_interrupted_approval_is_recovered_from_journal(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_interrupted_approval_is_recovered_from_journal(tmp_path: Path) -> None:
     application = create_application(tmp_path)
     commit_approved_run(application)
-    original_replace = storage._replace_json
-
-    def interrupt_manifest(target: Path, value: dict[str, object]) -> None:
-        if target == application.resolve() / "manifest.json":
-            raise OSError("simulated interruption")
-        original_replace(target, value)
-
-    monkeypatch.setattr(storage, "_replace_json", interrupt_manifest)
-    with pytest.raises(OSError, match="simulated interruption"):
-        approve_run(
-            application,
-            RUN_ID,
-            {"FACT-PROJECT-001-01": "引用值"},
-            approved_at=NOW,
-        )
+    transaction_id = "approval_" + "d" * 32
+    pointer, job_manifest = storage._approval_payloads(
+        application.resolve(),
+        RUN_ID,
+        {"FACT-PROJECT-001-01": "引用值"},
+        NOW,
+        transaction_id,
+    )
     journal = application / "resume-content" / ".approval-transaction.json"
+    storage._replace_json(
+        journal,
+        {
+            "transaction_id": transaction_id,
+            "current": pointer.model_dump(mode="json"),
+            "manifest": job_manifest,
+        },
+    )
     assert journal.exists()
-
-    monkeypatch.setattr(storage, "_replace_json", original_replace)
     assert recover_approval(application) is True
     assert not journal.exists()
     assert validate_pointer_consistency(application).status is ContentState.APPROVED

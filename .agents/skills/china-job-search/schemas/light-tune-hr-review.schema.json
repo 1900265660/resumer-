@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "light-tune-hr-review.schema.json",
+  "title": "Light tune HR review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "recommendation",
+    "overall_score",
+    "dimensions",
+    "defect_category",
+    "requires_experience_change",
+    "evidence",
+    "revision_instructions"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "recommendation": {"enum": ["strong_push", "push", "hesitate", "reject"]},
+    "overall_score": {"type": "number", "minimum": 0, "maximum": 10},
+    "dimensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role_fit",
+        "narrative_completeness",
+        "evidence_specificity",
+        "decision_readiness",
+        "credibility",
+        "content_fullness"
+      ],
+      "properties": {
+        "role_fit": {"type": "number", "minimum": 0, "maximum": 10},
+        "narrative_completeness": {"type": "number", "minimum": 0, "maximum": 10},
+        "evidence_specificity": {"type": "number", "minimum": 0, "maximum": 10},
+        "decision_readiness": {"type": "number", "minimum": 0, "maximum": 10},
+        "credibility": {"type": "number", "minimum": 0, "maximum": 10},
+        "content_fullness": {"type": "number", "minimum": 0, "maximum": 10}
+      }
+    },
+    "defect_category": {
+      "enum": ["none", "wording", "ordering", "selection", "story", "fact_conflict"]
+    },
+    "requires_experience_change": {"type": "boolean"},
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "revision_instructions": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}
+

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "concrete-job-batch.schema.json",
+  "title": "Concrete campus jobs for workbook expansion",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "positions"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "positions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_row", "company", "concrete_job", "jd_url", "application_url"],
+        "properties": {
+          "source_row": {"type": "integer", "minimum": 1},
+          "company": {"type": "string", "minLength": 1},
+          "concrete_job": {"type": "string", "minLength": 1},
+          "jd_url": {"type": "string", "format": "uri"},
+          "application_url": {"type": "string", "format": "uri"},
+          "resume_strategy": {"enum": ["", "直接复用", "快速生成", "待补事实", "暂缓完整重写", "排除"]},
+          "baseline_id": {"type": "string"},
+          "hr_result": {"type": "string"},
+          "resume_path": {"type": "string"},
+          "attachments": {"type": "string"},
+          "material_status": {
+            "enum": ["待读取JD", "待快速生成", "HR复核中", "可投递", "待补事实", "暂缓完整重写", "待人工处理", "待用户确认", "阻断"]
+          },
+          "notes": {"type": "string"},
+          "application_status": {"type": "string"},
+          "employment_type": {"type": "string"},
+          "is_internship": {"type": "boolean"},
+          "is_expired": {"type": "boolean"},
+          "is_pure_hard_tech": {"type": "boolean"},
+          "has_success_receipt": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

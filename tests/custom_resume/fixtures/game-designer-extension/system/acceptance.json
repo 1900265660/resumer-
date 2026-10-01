@@ -1,0 +1,7 @@
+{
+  "truth_passed": true,
+  "quality": {"jd_coverage": 8.8, "selection_quality": 8.8, "evidence_depth": 8.7, "hr_scan": 8.8, "language_naturalness": 8.6},
+  "hr": {"recommendation": "strong_push", "overall_score": 8.8, "minimum_dimension_score": 8.6},
+  "required_fact_ids": ["FACT-PROJECT-201-01", "FACT-PROJECT-201-02"],
+  "forbidden_inferences": ["play_history_is_system_design"]
+}

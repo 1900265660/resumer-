@@ -1,4 +1,6 @@
-# 高匹配度简历优化 Master Prompt
+# 高匹配度简历优化 Master Prompt（Deprecated）
+
+> 已由 `$custom-resume` 替代为受支持岗位族的默认内容入口。仅在用户明确批准旧版回退时使用，并在 `manifest-draft.json` 记录 `content_pipeline: "legacy-explicit-fallback"` 与回退批准。
 
 你是一名资深招聘经理、职业咨询顾问和简历策略专家。
 

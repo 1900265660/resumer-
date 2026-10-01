@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "resume-claims.schema.json",
+  "title": "Approved resume claim library",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "profile_sha256", "claims_sha256", "claims"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "generated_at": {"type": "string"},
+    "profile_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "claims_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["claim_id", "experience_id", "fact_ids", "text", "capability_tags", "role_families", "context", "section", "heading", "source", "status"],
+        "properties": {
+          "claim_id": {"type": "string", "pattern": "^CLAIM-[0-9a-f]{12}$"},
+          "experience_id": {"type": "string", "minLength": 1},
+          "fact_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^FACT-"}},
+          "text": {"type": "string", "minLength": 1},
+          "capability_tags": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+          "role_families": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+          "context": {"enum": ["game", "non_game", "both"]},
+          "section": {"type": "string", "minLength": 1},
+          "heading": {"type": "string", "minLength": 1},
+          "source": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["application_dir", "run_id", "fusion_sha256", "source_files", "approval_basis"],
+            "properties": {
+              "application_dir": {"type": "string", "minLength": 1},
+              "run_id": {"type": "string", "minLength": 1},
+              "fusion_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "source_files": {"type": "array", "items": {"type": "object"}},
+              "approval_basis": {"enum": ["user_approved_current", "passed_baseline"]}
+            }
+          },
+          "status": {"enum": ["active", "deprecated"]}
+        }
+      }
+    }
+  }
+}

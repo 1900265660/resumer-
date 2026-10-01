@@ -1,0 +1,5 @@
+[mcp_servers.job_application]
+command = "C:\\Users\\Administrator\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\powershell\\pwsh.exe"
+args = ["-NoProfile", "-File", "E:\\zhuomian\\简历\\项目\\Codex-求职助手\\scripts\\start_browser_application.ps1"]
+startup_timeout_sec = 30
+tool_timeout_sec = 360

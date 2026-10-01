@@ -1,0 +1,9 @@
+{
+  "case_id": "game-designer-combat",
+  "category": "game_designer_combat",
+  "company": "示例动作团队",
+  "role": "战斗策划",
+  "role_family": "game_designer",
+  "role_track": "combat",
+  "expected_hard_gap": false
+}

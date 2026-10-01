@@ -14,6 +14,7 @@ SCRIPTS_DIR = REPO_ROOT / ".agents" / "skills" / "custom-resume" / "scripts"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 from fact_library import FactLibraryError, parse_fact_records  # noqa: E402
+from exemplar_library import ResumeExemplarMatch  # noqa: E402
 from models import (  # noqa: E402
     AuditArtifact,
     AuditDisposition,
@@ -29,6 +30,7 @@ from models import (  # noqa: E402
     CoverageLevel,
     DraftAgent,
     DraftArtifact,
+    DraftQualityAuditArtifact,
     DeterministicValidationArtifact,
     DiffAction,
     EvidenceMapArtifact,
@@ -47,6 +49,7 @@ from models import (  # noqa: E402
     HrRecommendation,
     HrReviewArtifact,
     HrReviewDisposition,
+    HrUncitedFactAssessment,
     InterviewImpact,
     JobTaskEvidenceLevel,
     JDAnalysisArtifact,
@@ -59,6 +62,7 @@ from models import (  # noqa: E402
     ReferenceSource,
     ReferenceSourceType,
     RoleFamily,
+    RoleTrack,
     RequirementPriority,
     RevisionRecord,
     ResumeBullet,
@@ -73,6 +77,7 @@ from models import (  # noqa: E402
     SelectionAuditRow,
     SelectionAuditVerdict,
     TruthAudit,
+    UncitedFactDisposition,
     TransferConfidence,
     TransferDistance,
     TransferScoreCredit,
@@ -85,8 +90,12 @@ from orchestrator import (  # noqa: E402
     OrchestrationError,
     NormalizedRunInput,
     normalize_run_input,
+    render_resume_markdown,
+    role_content_guidance,
+    role_prompt_route,
 )
 from storage import (  # noqa: E402
+    StorageError,
     checkpoint_path,
     load_checkpoint,
     load_run,
@@ -149,6 +158,15 @@ def prepare_repo(tmp_path: Path) -> Path:
     (reference.parent / "game-production-pm-method-cards.md").write_text(
         "游戏研发 PM 方法卡，不是候选人事实。", encoding="utf-8"
     )
+    (reference.parent / "community-operations-method-cards.md").write_text(
+        "社区运营方法卡，不是候选人事实。", encoding="utf-8"
+    )
+    (reference.parent / "community-product-method-cards.md").write_text(
+        "社区产品方法卡，不是候选人事实。", encoding="utf-8"
+    )
+    (reference.parent / "game-designer-method-cards.md").write_text(
+        "游戏策划方法卡，不是候选人事实。", encoding="utf-8"
+    )
     return tmp_path
 
 
@@ -167,6 +185,53 @@ def normalized(tmp_path: Path):
     )
 
 
+def test_render_resume_markdown_omits_heading_duplicate_bullet(tmp_path: Path) -> None:
+    packet = normalized(tmp_path).packet
+    bullet = ResumeBullet(
+        bullet_id="FUSION-001",
+        text="本科二学位。",
+        fact_ids=["FACT-EDU-001-01"],
+        primary_value="教育背景",
+    )
+    fusion = FusionArtifact(
+        schema_version=packet.schema_version,
+        run_id=packet.run_id,
+        created_at=packet.created_at,
+        source_digests=packet.source_digests,
+        sections=[
+            ResumeSection(
+                name=ResumeSectionName.EDUCATION,
+                entries=[
+                    ResumeEntry(
+                        experience_id="EXP-EDU-001",
+                        heading="上海大学，社会工作，本科二学位，2025/09–2027/06",
+                        bullets=[bullet],
+                    )
+                ],
+            ),
+            ResumeSection(name=ResumeSectionName.WORK),
+            ResumeSection(name=ResumeSectionName.PRACTICE),
+            ResumeSection(name=ResumeSectionName.ABILITIES),
+        ],
+        decisions=[
+            FusionDecision(
+                decision_id="DEC-001",
+                action=FusionAction.REWRITE_FROM_BOTH,
+                source_bullet_ids=["WRITER-001", "ASU-001"],
+                output_bullet_id="FUSION-001",
+                output_text="本科二学位。",
+                fact_ids=["FACT-EDU-001-01"],
+                rationale="教育标题已经包含学历信息，正文不重复显示。",
+            )
+        ],
+    )
+
+    rendered = render_resume_markdown(fusion)
+
+    assert "### 上海大学，社会工作，本科二学位，2025/09–2027/06" in rendered
+    assert "- 本科二学位。" not in rendered
+
+
 def test_game_role_selects_game_method_card_and_freezes_role(tmp_path: Path) -> None:
     prepare_repo(tmp_path)
     game = normalize_run_input(
@@ -182,6 +247,96 @@ def test_game_role_selects_game_method_card_and_freezes_role(tmp_path: Path) -> 
     )
     assert game.packet.role_family is RoleFamily.GAME_PRODUCTION_PM
     assert game.reference_cards_text == "游戏研发 PM 方法卡，不是候选人事实。"
+    assert game.resume_exemplars == ()
+
+
+@pytest.mark.parametrize(
+    ("role_family", "role_track", "expected_card"),
+    [
+        (
+            RoleFamily.COMMUNITY_OPERATIONS,
+            RoleTrack.CONTENT,
+            "社区运营方法卡，不是候选人事实。",
+        ),
+        (
+            RoleFamily.COMMUNITY_PRODUCT_MANAGER,
+            None,
+            "社区产品方法卡，不是候选人事实。",
+        ),
+        (
+            RoleFamily.GAME_DESIGNER,
+            RoleTrack.SYSTEM,
+            "游戏策划方法卡，不是候选人事实。",
+        ),
+    ],
+)
+def test_v15_role_route_selects_its_method_card(
+    tmp_path: Path,
+    role_family: RoleFamily,
+    role_track: RoleTrack | None,
+    expected_card: str,
+) -> None:
+    prepare_repo(tmp_path)
+    normalized_input = normalize_run_input(
+        tmp_path,
+        source_type=SourceType.TEXT,
+        source_locator="inline:text",
+        company="测试公司",
+        role="测试岗位",
+        jd_text="负责目标岗位工作。",
+        now=NOW,
+        run_id=RUN_ID,
+        role_family=role_family,
+        role_track=role_track,
+    )
+    assert normalized_input.packet.role_family is role_family
+    assert normalized_input.packet.role_track is role_track
+    assert normalized_input.reference_cards_text == expected_card
+
+
+def test_v15_route_rejects_missing_or_cross_family_track(tmp_path: Path) -> None:
+    prepare_repo(tmp_path)
+    with pytest.raises(OrchestrationError, match="requires role_track"):
+        normalize_run_input(
+            tmp_path,
+            source_type=SourceType.TEXT,
+            source_locator="inline:text",
+            company="测试公司",
+            role="社区运营",
+            jd_text="负责社区运营。",
+            now=NOW,
+            run_id=RUN_ID,
+            role_family=RoleFamily.COMMUNITY_OPERATIONS,
+        )
+    with pytest.raises(OrchestrationError, match="invalid role_track"):
+        normalize_run_input(
+            tmp_path,
+            source_type=SourceType.TEXT,
+            source_locator="inline:text",
+            company="测试公司",
+            role="系统策划",
+            jd_text="负责系统策划。",
+            now=NOW,
+            run_id=RUN_ID,
+            role_family=RoleFamily.GAME_DESIGNER,
+            role_track=RoleTrack.CONTENT,
+        )
+
+
+def test_game_role_content_guidance_distills_reusable_judgment() -> None:
+    guidance = role_content_guidance(RoleFamily.GAME_PRODUCTION_PM)
+    assert guidance["fact_freshness"] == {
+        "source": "current_frozen_fact_snapshot",
+        "prior_resume_or_run_is_not_a_fact_source": True,
+        "rerun_analysis_after_fact_digest_change": True,
+        "prefer_latest_confirmed_exact_values": True,
+    }
+    game_history = guidance["game_history"]
+    assert game_history["selection_priority"][0] == "target_company_or_title"
+    assert game_history["hours_alone_do_not_determine_selection"] is True
+    assert "genre overclaim" in game_history["avoid"]
+    assert "inventory-style game lists" in game_history["avoid"]
+    assert role_content_guidance(RoleFamily.AI_PRODUCT_MANAGER) == {}
 
 
 def analysis_artifacts(packet):
@@ -190,6 +345,8 @@ def analysis_artifacts(packet):
         run_id=packet.run_id,
         created_at=packet.created_at,
         source_digests=packet.source_digests,
+        role_family=packet.role_family,
+        role_track=packet.role_track,
         job_goal="提升 AI 问答产品质量",
         business_problems=["问答效果需要评测迭代"],
         requirements=[
@@ -328,8 +485,83 @@ def draft(packet, agent: DraftAgent) -> DraftArtifact:
         run_id=packet.run_id,
         created_at=packet.created_at,
         source_digests=packet.source_digests,
+        role_family=packet.role_family,
+        role_track=packet.role_track,
         agent=agent,
         sections=sections(agent, "完成三轮评测，准确率提升至 88%。"),
+    )
+
+
+def draft_quality_audit(
+    run: CoordinatorRun, *, passed: bool = True
+) -> DraftQualityAuditArtifact:
+    _, facts = parse_fact_records(run.normalized.fact_text)
+    fact_values = {fact_id: item.value for fact_id, item in facts.items()}
+    packet = run.draft_quality_auditor_packet(fact_values)
+    score = 8.5 if passed else 7.5
+    dimension = {
+        "score": score,
+        "evidence": ["逐条检查经历展开、结果背书、信息密度与扫读自然度。"],
+        "recommendations": [] if passed else ["补足个人动作、方法与结果证据。"],
+    }
+    drafts = {
+        DraftAgent.WRITER: run.writer_draft,
+        DraftAgent.ASU_WRITER: run.asu_draft,
+    }
+    lane_reviews = []
+    for lane in packet["drafts"]:
+        agent = DraftAgent(lane["agent"])
+        artifact = drafts[agent]
+        assert artifact is not None
+        bullet_counts = {
+            entry.experience_id: len(entry.bullets)
+            for section in artifact.sections
+            if section.name in {ResumeSectionName.WORK, ResumeSectionName.PRACTICE}
+            for entry in section.entries
+        }
+        lane_reviews.append(
+            {
+                "agent": agent,
+                "draft_sha256": lane["draft_sha256"],
+                "experience_development": dimension,
+                "result_backing": dimension,
+                "information_density": dimension,
+                "scan_naturalness": dimension,
+                "experience_reviews": [
+                    {
+                        "experience_id": experience_id,
+                        "bullet_count": bullet_count,
+                        "score": score,
+                        "developed_elements": [
+                            "personal_action",
+                            "deliverable_or_complexity",
+                            "credible_result",
+                        ],
+                        "result_status": "quantified",
+                        "result_rationale": "事实库包含可引用的量化评测结果。",
+                        "evidence": ["动作、交付和结果均已进入草稿。"],
+                        "defects": [] if passed else ["经历仍停留在事实摘要层。"],
+                        "revision_instructions": (
+                            [] if passed else ["按对象、动作、方法、交付、结果重新展开。"]
+                        ),
+                        "passed": passed,
+                    }
+                    for experience_id, bullet_count in bullet_counts.items()
+                ],
+                "passed": passed,
+            }
+        )
+    return DraftQualityAuditArtifact.model_validate(
+        {
+            "schema_version": run.packet.schema_version,
+            "run_id": run.packet.run_id,
+            "created_at": run.packet.created_at,
+            "source_digests": run.packet.source_digests,
+            "revision_round": packet["revision_round"],
+            "execution_mode": run.execution_mode,
+            "lane_reviews": lane_reviews,
+            "passed": passed,
+        }
     )
 
 
@@ -765,6 +997,7 @@ def test_full_content_only_flow_commits_reviewable_run_and_pointer(tmp_path: Pat
         draft(run.packet, DraftAgent.WRITER),
         draft(run.packet, DraftAgent.ASU_WRITER),
     )
+    assert run.record_draft_quality_audit(draft_quality_audit(run)) is True
     report = run.record_fusion(fused(run.packet), experiences, facts)
     assert report.passed is True
     fact_values = {fact_id: item.value for fact_id, item in facts.items()}
@@ -785,21 +1018,85 @@ def test_full_content_only_flow_commits_reviewable_run_and_pointer(tmp_path: Pat
             approved_at=NOW,
         )
 
-    final = run.finalize_content(
-        approval_granted=True,
-        referenced_fact_values=fact_values,
-        approved_at=NOW,
+    with pytest.raises(StorageError, match="schema 1.5"):
+        run.finalize_content(
+            approval_granted=True,
+            referenced_fact_values=fact_values,
+            approved_at=NOW,
+        )
+    assert not (run.normalized.application_dir / "resume-content" / "current.json").exists()
+
+
+def test_fusion_is_blocked_until_post_draft_quality_audit_passes(
+    tmp_path: Path,
+) -> None:
+    run = CoordinatorRun.create(normalized(tmp_path))
+    jd, evidence, fact_diff = analysis_artifacts(run.packet)
+    run.record_analysis(jd, evidence, fact_diff)
+    approve_run_selection(run)
+    experiences, facts = parse_fact_records(run.normalized.fact_text)
+    run.record_drafts(
+        draft(run.packet, DraftAgent.WRITER),
+        draft(run.packet, DraftAgent.ASU_WRITER),
     )
-    assert validate_run_artifact_completeness(final) == []
-    assert not list(final.glob("*.pdf"))
-    assert not list(final.glob("*.html"))
-    assert load_run(run.normalized.application_dir, RUN_ID).state is ContentState.NEEDS_CONTENT_REVIEW
-    assert validate_pointer_consistency(run.normalized.application_dir).approved_run_id == RUN_ID
-    manifest = json.loads(
-        (run.normalized.application_dir / "manifest.json").read_text(encoding="utf-8")
+
+    with pytest.raises(AgentHandoffError, match="post-draft quality audit"):
+        run.record_fusion(fused(run.packet), experiences, facts)
+
+
+def test_failed_post_draft_quality_audit_blocks_fusion(tmp_path: Path) -> None:
+    run = CoordinatorRun.create(normalized(tmp_path))
+    jd, evidence, fact_diff = analysis_artifacts(run.packet)
+    run.record_analysis(jd, evidence, fact_diff)
+    approve_run_selection(run)
+    experiences, facts = parse_fact_records(run.normalized.fact_text)
+    run.record_drafts(
+        draft(run.packet, DraftAgent.WRITER),
+        draft(run.packet, DraftAgent.ASU_WRITER),
     )
-    assert manifest["status"] == "imported"
-    assert manifest["resume_content"]["status"] == "approved"
+
+    assert run.record_draft_quality_audit(
+        draft_quality_audit(run, passed=False)
+    ) is False
+    with pytest.raises(AgentHandoffError, match="passing post-draft quality audit"):
+        run.record_fusion(fused(run.packet), experiences, facts)
+
+
+def test_post_draft_quality_audit_must_match_current_draft_hashes(
+    tmp_path: Path,
+) -> None:
+    run = CoordinatorRun.create(normalized(tmp_path))
+    jd, evidence, fact_diff = analysis_artifacts(run.packet)
+    run.record_analysis(jd, evidence, fact_diff)
+    approve_run_selection(run)
+    run.record_drafts(
+        draft(run.packet, DraftAgent.WRITER),
+        draft(run.packet, DraftAgent.ASU_WRITER),
+    )
+    audit = draft_quality_audit(run)
+    tampered_lane = audit.lane_reviews[0].model_copy(
+        update={"draft_sha256": "0" * 64}
+    )
+    tampered = audit.model_copy(
+        update={"lane_reviews": [tampered_lane, *audit.lane_reviews[1:]]}
+    )
+
+    with pytest.raises(AgentHandoffError, match="hash does not match"):
+        run.record_draft_quality_audit(tampered)
+
+
+def test_passing_post_draft_quality_audit_freezes_drafts(tmp_path: Path) -> None:
+    run = CoordinatorRun.create(normalized(tmp_path))
+    jd, evidence, fact_diff = analysis_artifacts(run.packet)
+    run.record_analysis(jd, evidence, fact_diff)
+    approve_run_selection(run)
+    writer = draft(run.packet, DraftAgent.WRITER)
+    asu = draft(run.packet, DraftAgent.ASU_WRITER)
+    run.record_drafts(writer, asu)
+    assert run.record_draft_quality_audit(draft_quality_audit(run)) is True
+
+    with pytest.raises(OrchestrationError, match="quality audit already froze"):
+        run.record_drafts(writer, asu)
 
 
 def test_deterministic_failure_blocks_auditor(tmp_path: Path) -> None:
@@ -812,6 +1109,7 @@ def test_deterministic_failure_blocks_auditor(tmp_path: Path) -> None:
         draft(run.packet, DraftAgent.WRITER),
         draft(run.packet, DraftAgent.ASU_WRITER),
     )
+    assert run.record_draft_quality_audit(draft_quality_audit(run)) is True
     with pytest.raises(DeterministicGateError) as captured:
         run.record_fusion(
             fused(run.packet, text="完成四轮评测，准确率提升至 99%。"),
@@ -847,6 +1145,7 @@ def test_audit_allows_at_most_two_directed_revision_rounds(tmp_path: Path) -> No
         draft(run.packet, DraftAgent.WRITER),
         draft(run.packet, DraftAgent.ASU_WRITER),
     )
+    assert run.record_draft_quality_audit(draft_quality_audit(run)) is True
 
     run.record_fusion(fused(run.packet), experiences, facts)
     assert run.record_audit(failing_audit(run, 0)) is False
@@ -873,6 +1172,23 @@ def test_wrong_agent_lane_is_rejected(tmp_path: Path) -> None:
         run.record_drafts(writer, writer)
 
 
+def test_draft_role_route_mismatch_is_rejected(tmp_path: Path) -> None:
+    run = CoordinatorRun.create(normalized(tmp_path))
+    jd, evidence, fact_diff = analysis_artifacts(run.packet)
+    run.record_analysis(jd, evidence, fact_diff)
+    approve_run_selection(run)
+    writer = draft(run.packet, DraftAgent.WRITER)
+    asu = draft(run.packet, DraftAgent.ASU_WRITER)
+    mismatched = writer.model_copy(
+        update={
+            "role_family": RoleFamily.COMMUNITY_OPERATIONS,
+            "role_track": RoleTrack.CONTENT,
+        }
+    )
+    with pytest.raises(AgentHandoffError, match="role route"):
+        run.record_drafts(mismatched, asu)
+
+
 def test_post_fusion_opportunity_cost_failure_returns_to_selection(tmp_path: Path) -> None:
     run = CoordinatorRun.create(normalized(tmp_path))
     jd, evidence, fact_diff = analysis_artifacts(run.packet)
@@ -883,6 +1199,7 @@ def test_post_fusion_opportunity_cost_failure_returns_to_selection(tmp_path: Pat
         draft(run.packet, DraftAgent.WRITER),
         draft(run.packet, DraftAgent.ASU_WRITER),
     )
+    assert run.record_draft_quality_audit(draft_quality_audit(run)) is True
     run.record_fusion(fused(run.packet), experiences, facts)
 
     assert run.record_audit(reselection_audit(run)) is False
@@ -900,6 +1217,7 @@ def test_v12_transfer_map_gates_selection_and_writer_packet(tmp_path: Path) -> N
     prepare_repo(tmp_path)
     normalized_v12 = normalize_run_input(
         tmp_path,
+        schema_version="1.2",
         source_type=SourceType.TEXT,
         source_locator="inline:text",
         company="测试公司V12",
@@ -949,6 +1267,7 @@ def test_v12_transfer_map_gates_selection_and_writer_packet(tmp_path: Path) -> N
         for category in CapabilityCategory
     ]
     transfer_map = CapabilityTransferMapArtifact(
+        schema_version="1.2",
         run_id=run.packet.run_id,
         created_at=NOW,
         source_digests=run.packet.source_digests,
@@ -1002,6 +1321,7 @@ def test_v12_transfer_map_gates_selection_and_writer_packet(tmp_path: Path) -> N
         is_personal_development=True,
     )
     proposal = ExperienceSelectionArtifact(
+        schema_version="1.2",
         run_id=run.packet.run_id,
         created_at=NOW,
         source_digests=run.packet.source_digests,
@@ -1023,9 +1343,64 @@ def test_v12_transfer_map_gates_selection_and_writer_packet(tmp_path: Path) -> N
     excessive = proposal.model_copy(update={"candidates": [excessive_candidate]})
     with pytest.raises(AgentHandoffError, match="transfer credit exceeds adjacent limit"):
         run.record_experience_selection(excessive, experiences)
+    hidden_fact_candidate = candidate.model_copy(
+        update={"fact_ids": ["FACT-PROJECT-001-01"]}
+    )
+    hidden_fact_proposal = proposal.model_copy(
+        update={"candidates": [hidden_fact_candidate]}
+    )
+    with pytest.raises(
+        AgentHandoffError, match="must expose every confirmed fact"
+    ):
+        run.record_experience_selection(hidden_fact_proposal, experiences)
+    hidden_unselected_candidate = candidate.model_copy(
+        update={
+            "fact_ids": ["FACT-PROJECT-001-01"],
+            "selected": False,
+            "proposed_bullet_count": 0,
+        }
+    )
+    hidden_unselected_proposal = proposal.model_copy(
+        update={"candidates": [hidden_unselected_candidate]}
+    )
+    with pytest.raises(
+        AgentHandoffError, match="must expose every confirmed fact"
+    ):
+        run.record_experience_selection(hidden_unselected_proposal, experiences)
     run.record_experience_selection(proposal, experiences)
+    exemplar = ResumeExemplarMatch(
+        exemplar_id="game-production-test-v1",
+        title="脱敏游戏制作模范稿",
+        role_family="ai_product_manager",
+        matched_keywords=("评测", "用户调研"),
+        content_sha256=hashlib.sha256(b"approved exemplar").hexdigest(),
+        content_snapshot="approved exemplar",
+        approved_at="2026-08-30T12:00:00+08:00",
+        source_run_id="cr_20260829T112758_games2",
+        source_fact_snapshot_sha256="a" * 64,
+        allowed_uses=("structure", "bullet allocation"),
+        forbidden_uses=("fact source", "selection inheritance"),
+        quality={"hr_overall_score": 9.4},
+    )
+    original_normalized = run.normalized
+    run.normalized = NormalizedRunInput(
+        packet=original_normalized.packet,
+        application_dir=original_normalized.application_dir,
+        jd_text=original_normalized.jd_text,
+        fact_text=original_normalized.fact_text,
+        preferences_text=original_normalized.preferences_text,
+        reference_cards_text=original_normalized.reference_cards_text,
+        resume_exemplars=(exemplar,),
+    )
+    selection_packet = run.selection_auditor_packet(experiences, facts)
+    assert selection_packet["approved_resume_exemplars"][0]["fact_source"] is False
+    assert (
+        selection_packet["approved_resume_exemplars"][0]["selection_approval"]
+        is False
+    )
     run.record_selection_audit(
         SelectionAuditArtifact(
+            schema_version="1.2",
             run_id=run.packet.run_id,
             created_at=NOW,
             source_digests=run.packet.source_digests,
@@ -1049,10 +1424,201 @@ def test_v12_transfer_map_gates_selection_and_writer_packet(tmp_path: Path) -> N
     assert run.packet.approved_transfer_ids == ["TR-001"]
     assert [item["transfer_id"] for item in packet["approved_capability_transfers"]] == ["TR-001"]
     assert packet["fixed_education_baseline"][0]["facts"][0]["text"] == "测试大学，产品专业，本科，2022/09–2026/06。"
-    assert packet["fixed_ability_headings"] == ["专业硬技能", "综合软技能", "游戏体验", "语言能力"]
+    assert packet["fixed_ability_headings"] == ["专业硬技能", "综合软技能", "游戏经历", "语言能力"]
+    assert packet["role_content_guidance"] == {}
+    assert packet["approved_resume_exemplars"][0]["content_snapshot"] == "approved exemplar"
+    assert packet["approved_resume_exemplars"][0]["fact_source"] is False
+
+    original = run.normalized
+    run.normalized = NormalizedRunInput(
+        packet=run.packet.model_copy(
+            update={"role_family": RoleFamily.GAME_PRODUCTION_PM}
+        ),
+        application_dir=original.application_dir,
+        jd_text=original.jd_text,
+        fact_text=original.fact_text,
+        preferences_text=original.preferences_text,
+        reference_cards_text=original.reference_cards_text,
+    )
+    game_packet = run.writer_packet(experiences, facts)
+    assert game_packet["role_content_guidance"]["fact_freshness"][
+        "prior_resume_or_run_is_not_a_fact_source"
+    ] is True
+    assert game_packet["role_content_guidance"]["game_history"][
+        "selection_priority"
+    ][0] == "target_company_or_title"
+
+    original = run.normalized
+    run.normalized = NormalizedRunInput(
+        packet=run.packet.model_copy(
+            update={
+                "role_family": RoleFamily.COMMUNITY_OPERATIONS,
+                "role_track": RoleTrack.CONTENT,
+            }
+        ),
+        application_dir=original.application_dir,
+        jd_text=original.jd_text,
+        fact_text=original.fact_text,
+        preferences_text=original.preferences_text,
+        reference_cards_text=original.reference_cards_text,
+    )
+    community_guidance = role_content_guidance(
+        RoleFamily.COMMUNITY_OPERATIONS,
+        RoleTrack.CONTENT,
+    )
+    assert community_guidance["strategy_status"] == "released"
+    assert community_guidance["self_ability"]["third_heading"] == "行业/平台经历"
+    assert community_guidance["role_route"] == {
+        "role_family": "community_operations",
+        "role_track": "content",
+        "adjacent_evidence_does_not_become_direct_ownership": True,
+    }
+    community_packet = run.writer_packet(experiences, facts)
+    assert community_packet["fixed_ability_headings"] == [
+        "专业硬技能",
+        "综合软技能",
+        "行业/平台经历",
+        "语言能力",
+    ]
+
+    original = run.normalized
+    run.normalized = NormalizedRunInput(
+        packet=run.packet.model_copy(
+            update={
+                "role_family": RoleFamily.GAME_DESIGNER,
+                "role_track": RoleTrack.SYSTEM,
+            }
+        ),
+        application_dir=original.application_dir,
+        jd_text=original.jd_text,
+        fact_text=original.fact_text,
+        preferences_text=original.preferences_text,
+        reference_cards_text=original.reference_cards_text,
+    )
+    designer_packet = run.writer_packet(experiences, facts)
+    assert designer_packet["fixed_ability_headings"] == [
+        "专业硬技能",
+        "综合软技能",
+        "游戏经历",
+        "语言能力",
+    ]
+    assert designer_packet["role_content_guidance"]["strategy_status"] == "released"
 
 
-def v13_run_at_audit(tmp_path: Path) -> CoordinatorRun:
+@pytest.mark.parametrize(
+    ("role_track", "required_action", "forbidden_inference"),
+    [
+        (
+            RoleTrack.COMMUNITY,
+            "community_mechanism_or_moderation",
+            "community_size_is_not_health_improvement",
+        ),
+        (
+            RoleTrack.CONTENT,
+            "production_or_editing",
+            "content_output_is_not_growth_experiment",
+        ),
+        (
+            RoleTrack.GROWTH,
+            "hypothesis_or_experiment",
+            "content_traffic_is_not_growth_ownership",
+        ),
+        (
+            RoleTrack.INTEGRATED,
+            "direct_actions_from_at_least_two_operations_tracks",
+            "integrated_does_not_fill_a_missing_track",
+        ),
+    ],
+)
+def test_t26_community_operations_guidance_is_track_specific(
+    role_track: RoleTrack,
+    required_action: str,
+    forbidden_inference: str,
+) -> None:
+    guidance = role_content_guidance(RoleFamily.COMMUNITY_OPERATIONS, role_track)
+    assert guidance["strategy_status"] == "released"
+    assert required_action in guidance["evidence_strategy"]["required_actions"]
+    assert forbidden_inference in guidance["evidence_strategy"]["adjacent_is_not_direct"]
+
+
+def test_t26_community_product_guidance_keeps_operations_adjacent() -> None:
+    guidance = role_content_guidance(RoleFamily.COMMUNITY_PRODUCT_MANAGER)
+    assert guidance["strategy_status"] == "released"
+    strategy = guidance["evidence_strategy"]
+    assert "requirement_or_solution_definition" in strategy["required_product_actions"]
+    assert "activity_delivery" in strategy["operations_as_adjacent_only"]
+    assert "do not claim product ownership" in strategy["ownership_ceiling"]
+
+
+@pytest.mark.parametrize(
+    "role_family",
+    [RoleFamily.COMMUNITY_OPERATIONS, RoleFamily.COMMUNITY_PRODUCT_MANAGER],
+)
+def test_t26_community_roles_use_shared_writers_and_community_jd_prompt(
+    role_family: RoleFamily,
+) -> None:
+    assert role_prompt_route(role_family) == {
+        "jd_analysis": "jd-analysis-community.md",
+        "story_planner": "story-planner.md",
+        "writer": "writer.md",
+        "asu_writer": "asu-writer.md",
+    }
+
+
+@pytest.mark.parametrize(
+    ("role_track", "required_action", "forbidden_inference"),
+    [
+        (
+            RoleTrack.SYSTEM,
+            "rule_or_loop_design",
+            "play_history_or_review_is_not_system_design",
+        ),
+        (
+            RoleTrack.COMBAT,
+            "combat_playtest_debug_and_iteration",
+            "mod_or_quality_testing_is_not_combat_design",
+        ),
+        (
+            RoleTrack.WRITING,
+            "original_game_text_creation",
+            "translation_is_not_original_game_writing",
+        ),
+        (
+            RoleTrack.NARRATIVE,
+            "quest_chain_branch_or_state_design",
+            "linear_writing_is_not_branching_narrative",
+        ),
+        (
+            RoleTrack.GENERAL,
+            "direct_design_actions_from_at_least_two_tracks",
+            "general_does_not_fill_missing_design_ownership",
+        ),
+    ],
+)
+def test_t27_game_designer_guidance_is_track_specific(
+    role_track: RoleTrack,
+    required_action: str,
+    forbidden_inference: str,
+) -> None:
+    guidance = role_content_guidance(RoleFamily.GAME_DESIGNER, role_track)
+    assert guidance["strategy_status"] == "released"
+    assert required_action in guidance["evidence_strategy"]["required_actions"]
+    assert forbidden_inference in guidance["evidence_strategy"]["adjacent_is_not_direct"]
+    assert guidance["self_ability"]["third_heading"] == "游戏经历"
+
+
+def test_t27_game_designer_uses_direction_specific_prompt_route() -> None:
+    assert role_prompt_route(RoleFamily.GAME_DESIGNER) == {
+        "jd_analysis": "jd-analysis-game-designer.md",
+        "story_planner": "story-planner.md",
+        "writer": "writer-game-designer.md",
+        "asu_writer": "asu-writer-game-designer.md",
+    }
+
+
+def v13_run_at_audit(
+    tmp_path: Path, *, schema_version: str = "1.3"
+) -> CoordinatorRun:
     prepare_repo(tmp_path)
     base = normalize_run_input(
         tmp_path,
@@ -1063,7 +1629,7 @@ def v13_run_at_audit(tmp_path: Path) -> CoordinatorRun:
         jd_text=JD_TEXT,
         now=NOW,
         run_id=RUN_ID,
-        schema_version="1.3",
+        schema_version=schema_version,
     )
     packet = base.packet.model_copy(
         update={
@@ -1083,6 +1649,22 @@ def v13_run_at_audit(tmp_path: Path) -> CoordinatorRun:
         fact_text=base.fact_text,
         preferences_text=base.preferences_text,
         reference_cards_text=base.reference_cards_text,
+        resume_exemplars=(
+            ResumeExemplarMatch(
+                exemplar_id="ai-product-test-v1",
+                title="脱敏AI产品模范稿",
+                role_family="ai_product_manager",
+                matched_keywords=("用户调研", "评测"),
+                content_sha256=hashlib.sha256(b"approved exemplar").hexdigest(),
+                content_snapshot="approved exemplar",
+                approved_at="2026-08-30T12:00:00+08:00",
+                source_run_id="cr_20260829T112758_games2",
+                source_fact_snapshot_sha256="a" * 64,
+                allowed_uses=("structure", "bullet allocation"),
+                forbidden_uses=("fact source", "selection inheritance"),
+                quality={"hr_overall_score": 9.4},
+            ),
+        ),
     )
     jd, evidence, fact_diff = analysis_artifacts(packet)
     candidate = ExperienceCandidateScore(
@@ -1122,7 +1704,7 @@ def v13_run_at_audit(tmp_path: Path) -> CoordinatorRun:
         is_personal_development=True,
     )
     selection = ExperienceSelectionArtifact(
-        schema_version="1.3",
+        schema_version=schema_version,
         run_id=packet.run_id,
         created_at=packet.created_at,
         source_digests=packet.source_digests,
@@ -1152,7 +1734,7 @@ def v13_run_at_audit(tmp_path: Path) -> CoordinatorRun:
     ]
     ability_entries = []
     for index, heading in enumerate(
-        ["专业硬技能", "综合软技能", "游戏体验", "语言能力"], start=2
+        ["专业硬技能", "综合软技能", "游戏经历", "语言能力"], start=2
     ):
         bullet = ResumeBullet(
             bullet_id=f"FUSION-{index:03d}",
@@ -1177,7 +1759,7 @@ def v13_run_at_audit(tmp_path: Path) -> CoordinatorRun:
             )
         )
     fusion = FusionArtifact(
-        schema_version="1.3",
+        schema_version=schema_version,
         run_id=packet.run_id,
         created_at=packet.created_at,
         source_digests=packet.source_digests,
@@ -1199,7 +1781,7 @@ def v13_run_at_audit(tmp_path: Path) -> CoordinatorRun:
         decisions=decisions,
     )
     validation = DeterministicValidationArtifact(
-        schema_version="1.3",
+        schema_version=schema_version,
         run_id=packet.run_id,
         created_at=packet.created_at,
         source_digests=packet.source_digests,
@@ -1211,7 +1793,7 @@ def v13_run_at_audit(tmp_path: Path) -> CoordinatorRun:
         ),
     )
     reference_research = ReferenceResearchArtifact(
-        schema_version="1.3",
+        schema_version=schema_version,
         run_id=packet.run_id,
         created_at=packet.created_at,
         source_digests=packet.source_digests,
@@ -1238,22 +1820,60 @@ def v13_run_at_audit(tmp_path: Path) -> CoordinatorRun:
 def hr_review(run: CoordinatorRun, *, passed: bool) -> HrReviewArtifact:
     score = 8.5 if passed else 7.5
     dimension = HrDecisionDimension(score=score, evidence=["招聘决策证据"])
-    reviews = [
-        HrExperienceReview(
-            experience_id=experience_id,
-            ten_second_impression="证据清晰" if passed else "证据仍过度压缩",
-            effective_requirement_ids=["REQ-001"] if experience_id != "EXP-SKILL-001" else [],
-            strengths=["事实可追溯"],
-            defects=[] if passed else ["缺少完整方法与结果链"],
-            severity_score=0 if passed else 7,
-            interview_impact=InterviewImpact.NONE if passed else InterviewImpact.MATERIAL,
-            recommended_bullet_count=1 if experience_id == "EXP-SKILL-001" else 3,
-            revision_instructions=[] if passed else ["使用现有事实展开证据链"],
+    reviews = []
+    for experience_id in ["EXP-PROJECT-001", "EXP-SKILL-001"]:
+        schema_v14_project = (
+            run.packet.schema_version == "1.4"
+            and experience_id == "EXP-PROJECT-001"
         )
-        for experience_id in ["EXP-PROJECT-001", "EXP-SKILL-001"]
-    ]
+        assessments = (
+            [
+                HrUncitedFactAssessment(
+                    fact_id="FACT-PROJECT-001-02",
+                    disposition=(
+                        UncitedFactDisposition.REDUNDANT
+                        if passed
+                        else UncitedFactDisposition.SHOULD_INCLUDE
+                    ),
+                    rationale=(
+                        "与已引用评测事实对本夹具的招聘判断重复。"
+                        if passed
+                        else "用户调研和原型方法应在正文展开。"
+                    ),
+                )
+            ]
+            if schema_v14_project
+            else []
+        )
+        reviews.append(
+            HrExperienceReview(
+                experience_id=experience_id,
+                ten_second_impression="证据清晰" if passed else "证据仍过度压缩",
+                effective_requirement_ids=(
+                    ["REQ-001"] if experience_id != "EXP-SKILL-001" else []
+                ),
+                strengths=["事实可追溯"],
+                defects=[] if passed else ["缺少完整方法与结果链"],
+                omitted_fact_ids=(
+                    ["FACT-PROJECT-001-02"]
+                    if schema_v14_project and not passed
+                    else []
+                ),
+                uncited_fact_assessments=assessments,
+                severity_score=0 if passed else 7,
+                interview_impact=(
+                    InterviewImpact.NONE if passed else InterviewImpact.MATERIAL
+                ),
+                recommended_bullet_count=(
+                    1 if experience_id == "EXP-SKILL-001" else 3
+                ),
+                revision_instructions=(
+                    [] if passed else ["使用现有事实展开证据链"]
+                ),
+            )
+        )
     return HrReviewArtifact(
-        schema_version="1.3",
+        schema_version=run.packet.schema_version,
         run_id=run.packet.run_id,
         created_at=run.packet.created_at,
         source_digests=run.packet.source_digests,
@@ -1281,6 +1901,14 @@ def hr_review(run: CoordinatorRun, *, passed: bool) -> HrReviewArtifact:
 
 def test_v13_passing_base_audit_requires_high_standard_hr_gate(tmp_path: Path) -> None:
     run = v13_run_at_audit(tmp_path)
+    audit_packet = run.auditor_packet(
+        {
+            "FACT-PROJECT-001-01": "完成 3 轮评测，准确率提升至 88%。",
+            "FACT-PROJECT-001-02": "完成用户调研和问答原型。",
+            "FACT-SKILL-001-01": "熟悉 RAG 与 Prompt 工程。",
+        }
+    )
+    assert audit_packet["approved_resume_exemplars"][0]["fact_source"] is False
     assert run.record_audit(passing_audit(run)) is False
     assert run.state is ContentState.HR_REVIEWING
     packet = run.hr_reviewer_packet(
@@ -1291,6 +1919,7 @@ def test_v13_passing_base_audit_requires_high_standard_hr_gate(tmp_path: Path) -
         }
     )
     assert packet["high_standard_gate"]["dimension_minimum"] == 8.5
+    assert packet["approved_resume_exemplars"][0]["selection_approval"] is False
     fact_values = {
         "FACT-PROJECT-001-01": "完成 3 轮评测，准确率提升至 88%。",
         "FACT-PROJECT-001-02": "完成用户调研和问答原型。",
@@ -1314,6 +1943,175 @@ def test_v13_only_strong_push_reaches_content_review(tmp_path: Path) -> None:
     assert run.state is ContentState.NEEDS_CONTENT_REVIEW
 
 
+def test_v14_hr_must_assess_every_uncited_selected_fact_before_strong_push(
+    tmp_path: Path,
+) -> None:
+    run = v13_run_at_audit(tmp_path, schema_version="1.4")
+    run.record_audit(passing_audit(run))
+    fact_values = {
+        "FACT-PROJECT-001-01": "完成 3 轮评测，准确率提升至 88%。",
+        "FACT-PROJECT-001-02": "完成用户调研和问答原型。",
+        "FACT-SKILL-001-01": "熟悉 RAG 与 Prompt 工程。",
+    }
+    packet = run.hr_reviewer_packet(fact_values)
+    assert packet["uncited_selected_fact_ids_by_experience"] == {
+        "EXP-PROJECT-001": ["FACT-PROJECT-001-02"],
+        "EXP-SKILL-001": [],
+    }
+    assert packet["completion_diagnostics"]["below_both_reference_targets"] is True
+
+    passing = hr_review(run, passed=True)
+    incomplete_reviews = [
+        item.model_copy(update={"uncited_fact_assessments": []})
+        if item.experience_id == "EXP-PROJECT-001"
+        else item
+        for item in passing.experience_reviews
+    ]
+    incomplete = passing.model_copy(update={"experience_reviews": incomplete_reviews})
+    with pytest.raises(
+        AgentHandoffError, match="must assess every uncited selected fact"
+    ):
+        run.record_hr_review(incomplete, fact_values)
+
+    assert run.record_hr_review(passing, fact_values) is True
+    assert run.state is ContentState.NEEDS_CONTENT_REVIEW
+
+
+def test_t30_content_fullness_uses_characters_not_bullet_count(tmp_path: Path) -> None:
+    run = v13_run_at_audit(tmp_path, schema_version="1.4")
+    short_gate = run._content_fullness_gate()
+    assert short_gate["passed"] is False
+    assert short_gate["bullet_count_is_not_a_gate"] is True
+    assert short_gate["per_experience"][0]["minimum_chinese_characters"] == 180
+
+    long_text = "项目管理" * 50
+    fusion_payload = run.current_fusion.model_dump(mode="python")
+    sections = fusion_payload["sections"]
+    project_entry = next(
+        entry
+        for section in sections
+        for entry in section["entries"]
+        if entry["experience_id"] == "EXP-PROJECT-001"
+    )
+    assert len(project_entry["bullets"]) == 1
+    project_entry["bullets"][0]["text"] = long_text
+    fusion_payload["sections"] = sections
+    run.fusion_history[-1] = FusionArtifact.model_validate(fusion_payload)
+    run.validation_history[-1] = run.current_validation.model_copy(
+        update={
+            "metrics": run.current_validation.metrics.model_copy(
+                update={"chinese_character_count": 1200}
+            )
+        }
+    )
+
+    long_gate = run._content_fullness_gate()
+    assert long_gate["passed"] is True
+    assert long_gate["per_experience"][0]["chinese_character_count"] == 200
+
+
+def test_t30_schema_v15_rejects_self_reported_hr_pass_below_character_gate(
+    tmp_path: Path,
+) -> None:
+    run = v13_run_at_audit(tmp_path, schema_version="1.4")
+    packet = run.packet.model_copy(update={"schema_version": "1.5"})
+    run.normalized = NormalizedRunInput(
+        packet=packet,
+        application_dir=run.normalized.application_dir,
+        jd_text=run.normalized.jd_text,
+        fact_text=run.normalized.fact_text,
+        preferences_text=run.normalized.preferences_text,
+        reference_cards_text=run.normalized.reference_cards_text,
+        resume_exemplars=run.normalized.resume_exemplars,
+    )
+    run.record_audit(passing_audit(run))
+    dimension = HrDecisionDimension(
+        score=9.0,
+        evidence=["最终要点证据"],
+        evidence_bullet_ids=["FUSION-001"],
+    )
+    review = HrReviewArtifact(
+        schema_version="1.5",
+        run_id=run.packet.run_id,
+        created_at=run.packet.created_at,
+        source_digests=run.packet.source_digests,
+        revision_round=0,
+        recommendation=HrRecommendation.STRONG_PUSH,
+        overall_score=9.0,
+        role_fit=dimension,
+        narrative_completeness=dimension,
+        evidence_specificity=dimension,
+        decision_readiness=dimension,
+        credibility=dimension,
+        content_fullness=dimension,
+        experience_reviews=[
+            HrExperienceReview(
+                experience_id="EXP-PROJECT-001",
+                ten_second_impression="事实完整但正文过短",
+                effective_requirement_ids=["REQ-001"],
+                evidence_bullet_ids=["FUSION-001"],
+                strengths=["事实可追溯"],
+                uncited_fact_assessments=[
+                    HrUncitedFactAssessment(
+                        fact_id="FACT-PROJECT-001-02",
+                        disposition=UncitedFactDisposition.REDUNDANT,
+                        rationale="测试夹具中与已引用事实重复。",
+                    )
+                ],
+                severity_score=0,
+                interview_impact=InterviewImpact.NONE,
+                recommended_bullet_count=1,
+            ),
+            HrExperienceReview(
+                experience_id="EXP-SKILL-001",
+                ten_second_impression="能力证据可读",
+                evidence_bullet_ids=["FUSION-002"],
+                strengths=["技能事实可追溯"],
+                severity_score=0,
+                interview_impact=InterviewImpact.NONE,
+                recommended_bullet_count=1,
+            ),
+        ],
+        issue_codes=[],
+        existing_fact_revision_sufficient=False,
+        fact_questions_required=False,
+        reselect_required=False,
+        passed=True,
+        disposition=HrReviewDisposition.PASSED,
+    )
+    fact_values = {
+        "FACT-PROJECT-001-01": "完成 3 轮评测，准确率提升至 88%。",
+        "FACT-PROJECT-001-02": "完成用户调研和问答原型。",
+        "FACT-SKILL-001-01": "熟悉 RAG 与 Prompt 工程。",
+    }
+    with pytest.raises(AgentHandoffError, match="content-fullness character gate"):
+        run.record_hr_review(review, fact_values)
+
+
+def test_v14_should_include_uncited_fact_forces_existing_fact_revision(
+    tmp_path: Path,
+) -> None:
+    run = v13_run_at_audit(tmp_path, schema_version="1.4")
+    run.record_audit(passing_audit(run))
+    fact_values = {
+        "FACT-PROJECT-001-01": "完成 3 轮评测，准确率提升至 88%。",
+        "FACT-PROJECT-001-02": "完成用户调研和问答原型。",
+        "FACT-SKILL-001-01": "熟悉 RAG 与 Prompt 工程。",
+    }
+    review = hr_review(run, passed=False)
+    project_review = next(
+        item
+        for item in review.experience_reviews
+        if item.experience_id == "EXP-PROJECT-001"
+    )
+    assert project_review.omitted_fact_ids == ["FACT-PROJECT-001-02"]
+    assert project_review.uncited_fact_assessments[0].disposition is (
+        UncitedFactDisposition.SHOULD_INCLUDE
+    )
+    assert run.record_hr_review(review, fact_values) is False
+    assert run.state is ContentState.AUDITING
+
+
 def test_v13_hr_review_rejects_unknown_or_cross_experience_omitted_fact(
     tmp_path: Path,
 ) -> None:
@@ -1322,7 +2120,16 @@ def test_v13_hr_review_rejects_unknown_or_cross_experience_omitted_fact(
     review = hr_review(run, passed=False)
     tampered_reviews = [
         item.model_copy(
-            update={"omitted_fact_ids": ["FACT-SKILL-001-01"]}
+            update={
+                "omitted_fact_ids": ["FACT-SKILL-001-01"],
+                "uncited_fact_assessments": [
+                    HrUncitedFactAssessment(
+                        fact_id="FACT-SKILL-001-01",
+                        disposition=UncitedFactDisposition.SHOULD_INCLUDE,
+                        rationale="错误地归入项目经历。",
+                    )
+                ],
+            }
         )
         if item.experience_id == "EXP-PROJECT-001"
         else item

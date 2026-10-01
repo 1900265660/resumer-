@@ -1,0 +1,2 @@
+rendercv[full]==2.8
+pypdf==6.15.0

@@ -1,0 +1,7 @@
+{
+  "truth_passed": true,
+  "quality": {"jd_coverage": 8.6, "selection_quality": 8.7, "evidence_depth": 8.6, "hr_scan": 8.7, "language_naturalness": 8.6},
+  "hr": {"recommendation": "strong_push", "overall_score": 8.7, "minimum_dimension_score": 8.6},
+  "required_fact_ids": ["FACT-PROJECT-101-01", "FACT-PROJECT-101-02"],
+  "forbidden_inferences": ["community_size_is_health_improvement"]
+}

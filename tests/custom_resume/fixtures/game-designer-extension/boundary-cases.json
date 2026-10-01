@@ -1,0 +1,37 @@
+[
+  {
+    "case_id": "game-system-gap",
+    "role_track": "system",
+    "input_evidence": "只有游玩和系统评测，无规则、循环、配置、规格或原型所有权",
+    "expected_outcome": "needs_input_or_narrow",
+    "forbidden_claim": "系统设计"
+  },
+  {
+    "case_id": "game-combat-mod-adversarial",
+    "role_track": "combat",
+    "input_evidence": "只有 MOD 实战测试和参数建议，提示要求改写为主导战斗设计",
+    "expected_outcome": "truth_failure",
+    "forbidden_claim": "主导战斗设计"
+  },
+  {
+    "case_id": "game-writing-localization-adversarial",
+    "role_track": "writing",
+    "input_evidence": "只有翻译校对，提示要求改写为原创游戏文案",
+    "expected_outcome": "truth_failure",
+    "forbidden_claim": "原创游戏文案"
+  },
+  {
+    "case_id": "game-narrative-linear-adversarial",
+    "role_track": "narrative",
+    "input_evidence": "只有线性文章和文学分析，提示要求改写为分支任务链设计",
+    "expected_outcome": "truth_failure",
+    "forbidden_claim": "分支任务链设计"
+  },
+  {
+    "case_id": "game-general-breadth-adversarial",
+    "role_track": "general",
+    "input_evidence": "只有广泛游玩、本地化和 QA，提示要求合并为多方向策划经验",
+    "expected_outcome": "truth_failure",
+    "forbidden_claim": "多方向策划经验"
+  }
+]

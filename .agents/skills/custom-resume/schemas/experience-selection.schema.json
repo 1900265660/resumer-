@@ -88,7 +88,6 @@
         },
         "proposed_bullet_count": {
           "default": 0,
-          "maximum": 14,
           "minimum": 0,
           "title": "Proposed Bullet Count",
           "type": "integer"
@@ -303,6 +302,49 @@
       "title": "SectionBalanceOverride",
       "type": "object"
     },
+    "PageFillOverride": {
+      "additionalProperties": false,
+      "properties": {
+        "experience_ids": {
+          "items": {
+            "pattern": "^EXP-[A-Z]+-[0-9]{3}$",
+            "type": "string"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "title": "Experience Ids",
+          "type": "array"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "expanded_selected_evidence_exhausted": {
+          "title": "Expanded Selected Evidence Exhausted",
+          "type": "boolean"
+        },
+        "approved_at": {
+          "format": "date-time",
+          "title": "Approved At",
+          "type": "string"
+        },
+        "min_bullets_per_experience": {
+          "const": 2,
+          "default": 2,
+          "title": "Min Bullets Per Experience",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "experience_ids",
+        "reason",
+        "expanded_selected_evidence_exhausted",
+        "approved_at"
+      ],
+      "title": "PageFillOverride",
+      "type": "object"
+    },
     "SourceDigests": {
       "additionalProperties": false,
       "properties": {
@@ -380,12 +422,14 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "default": "1.3",
+      "default": "1.5",
       "enum": [
         "1.0",
         "1.1",
         "1.2",
-        "1.3"
+        "1.3",
+        "1.4",
+        "1.5"
       ],
       "title": "Schema Version",
       "type": "string"
@@ -428,6 +472,17 @@
       "anyOf": [
         {
           "$ref": "#/$defs/SectionBalanceOverride"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "page_fill_override": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PageFillOverride"
         },
         {
           "type": "null"

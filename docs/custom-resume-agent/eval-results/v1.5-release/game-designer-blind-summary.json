@@ -1,0 +1,71 @@
+{
+  "evaluation_id": "v1.5-game-designer-real-blind-20260831-r3",
+  "evaluation_mode": "independent_blind_old_vs_new",
+  "case_count": 5,
+  "cases": [
+    "game-designer-combat",
+    "game-designer-general",
+    "game-designer-narrative",
+    "game-designer-system",
+    "game-designer-writing"
+  ],
+  "fact_snapshot_sha256": "9a6841a9dfb45e4c5d73df169c46941c8330f2d36469db726ef42bd9c269c428",
+  "passed": true,
+  "truth_gate_passed": true,
+  "quality_gate_passed": true,
+  "improved_dimensions": [
+    "jd_coverage",
+    "evidence_depth",
+    "hr_scan",
+    "selection_quality"
+  ],
+  "averages_legacy": {
+    "jd_coverage": 9.22,
+    "evidence_depth": 9.08,
+    "hr_scan": 9.2,
+    "language_naturalness": 9.24,
+    "selection_quality": 9.26
+  },
+  "averages_new": {
+    "jd_coverage": 9.5,
+    "evidence_depth": 9.3,
+    "hr_scan": 9.32,
+    "language_naturalness": 9.12,
+    "selection_quality": 9.34
+  },
+  "failures": [],
+  "truth_summary": {
+    "legacy_passed_cases": 0,
+    "new_passed_cases": 5,
+    "legacy_common_findings": [
+      "FIXED_SECTION_LEVEL_MISMATCH",
+      "EXTRA_TOP_LEVEL_STRUCTURE"
+    ],
+    "new_hard_findings": []
+  },
+  "revision_history": [
+    {
+      "round": 1,
+      "passed": false,
+      "finding": "combat, narrative and system contained cross-experience trace or unsupported capability language"
+    },
+    {
+      "round": 2,
+      "passed": false,
+      "finding": "general contained two cross-experience capability summaries"
+    },
+    {
+      "round": 3,
+      "passed": true,
+      "finding": "all five new candidates passed truth and quality gates"
+    }
+  ],
+  "provenance": {
+    "legacy_generation": "isolated independent agent; no V1.5 prompts or acceptance results",
+    "new_generation": "isolated independent agents; no legacy drafts or acceptance results",
+    "scoring": "fresh isolated blind evaluator for each evaluation round; candidate identities withheld until all score files existed",
+    "unblinding": "deterministic eval_harness.py unblind and summarize commands",
+    "private_mapping_committed": false,
+    "drafts_committed": false
+  }
+}

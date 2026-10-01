@@ -1,54 +1,94 @@
-# Custom Resume Artifact Contract
+# Custom Resume Schema 1.5 Artifacts
 
-This reference summarizes the public artifact boundaries implemented by the strict Pydantic 2 models in `scripts/models.py`. The code models remain authoritative.
+The strict Pydantic definitions in `scripts/models.py` and the exported JSON Schemas in `schemas/` are authoritative. Unknown fields are rejected.
 
-## Shared envelope
+## Required artifacts
 
-Every JSON artifact includes:
-
-- `schema_version`
-- `run_id`
-- `created_at`
-- source input digests
-- normalized `role_family` on the input packet and JD analysis (`ai_product_manager|game_production_pm`)
-
-Unknown fields are rejected unless a later documented schema revision explicitly allows them.
-
-## Artifacts
-
-| File | Purpose |
+| File | Current purpose |
 |---|---|
-| `run.json` | State, input digests, artifact inventory, errors, and revision count |
-| `jd-analysis.json` | Job goals, prioritized requirements, risks, keywords, and ideal evidence blueprint |
-| `evidence-map.json` | Requirement-to-fact mapping, coverage level, and gaps; schema 1.1 does not select experiences here |
-| `capability-transfer-map.json` | Eight-category scan for every eligible experience; traceable supported/candidate capability-transfer chains and writable boundaries |
-| `experience-selection.json` | Complete experience scorecard, deterministic transfer credits/tier, separate portfolio value, selection, similarity group, override, reasons, and bullet budgets |
-| `selection-audit-pre.json` | Independent exact-row pre-draft opportunity-cost audit |
-| `fact-diff.json` | Proposed fact additions/replacements, provenance, confirmation state, source hash, and applied result hash |
-| `draft-writer.json` | Writer sections, bullets, fact IDs, requirement IDs, and candidate suggestions |
-| `draft-asu.json` | ASu Writer output using the same draft contract |
-| `fusion.json` | Fused bullets, source decisions, rewrite reasons, and fact IDs |
-| `audit.json` | Truth, positive JD evidence, selection quality, gap disclosure, revisions/reselection, and overrides |
-| `hr-review.json` | Strict interview-advance decision, per-experience defects, omitted facts, and revision/input/reselection route |
-| `current.json` | Approved/stale run pointer and referenced-fact value digests |
-| `validation.json` | Stable hard/warning findings and content-budget metrics |
-| `reference-research.json` | Local/supplemented/degraded method-card routing evidence |
-| `resume-content/.pending/<run_id>.json` | Recoverable human-gate checkpoint; removed after immutable run commit |
+| `run.json` | Immutable run manifest, input hashes, artifacts, state, and generation round |
+| `jd-analysis.json` | Normalized role, requirements, risks, keywords, and evidence blueprint |
+| `evidence-map.json` | Requirement-to-confirmed-fact coverage and gaps |
+| `capability-transfer-map.json` | Fact-backed transfer chains and candidate questions |
+| `experience-selection.json` | Complete scoring pool and the selected 1–4 WORK/PROJECT experiences |
+| `selection-audit-pre.json` | Independent pre-draft selection audit |
+| `story-plan.json` | Story thesis, evidence buckets, one or more evidence-driven intents, capability IDs, and internal ownership guard for each selected experience |
+| `selection-user-approval.json` | User approval bound to the selection and story-plan hashes |
+| `draft-writer.json` | Standard Writer candidate with experience/intent/fact bindings |
+| `draft-asu.json` | Independent ASu Writer candidate using the same contract |
+| `draft-quality-audit.json` | Independent draft-lane audit bound to candidate hashes |
+| `fusion.json` | Fused candidate and bullet-level provenance |
+| `quality-gate.json` | Deterministic hard failures, warnings, per-experience results, and metrics bound to the fusion hash |
+| `audit.json` | Independent post-fusion audit |
+| `hr-review.json` | Strict interview-advance review with concrete experience/bullet evidence |
+| `agent-receipts.json` | Invocation receipts binding stage, role, model, prompt, input, and output hashes |
+| `validation.json` | Deterministic validation findings retained with the run |
+| `current.json` | `approved|stale|no_approved_content` pointer bound to run, content hash, and user approval ID |
+| `run-status.jsonl` | Append-only `approved|superseded|user_rejected|schema_invalid|revoked` status ledger |
 
-`fact-diff.json` may contain at most five structured option-style questions. The number of confirmed add/replace operations is not coupled to the question count.
+## Public structures
 
-## Content states
+```text
+StoryPlanArtifact
+  schema_version = "1.5"
+  experiences[]
+    experience_id
+    story_thesis
+    capability_ids[]
+    evidence.context_fact_ids[]
+    evidence.action_fact_ids[]
+    evidence.method_fact_ids[]
+    evidence.challenge_fact_ids[]
+    evidence.result_fact_ids[]
+    bullet_intents[{ intent_id, purpose, required_fact_ids[] }]
+    ownership_guard{ allowed_claims[], prohibited_claims[] }
 
-`not_started → analyzing → needs_input → awaiting_reference_approval → awaiting_selection_approval → drafting → auditing → hr_reviewing → needs_content_review → approved`
+AgentInvocationReceipt
+  stage
+  role
+  invocation_id
+  model
+  reasoning_effort
+  prompt_sha256
+  input_sha256
+  output_sha256
+  created_at
 
-`auditing → awaiting_selection_approval` is allowed only for recorded reselection, at most twice.
+QualityGateArtifact
+  candidate_sha256
+  story_plan_sha256
+  passed
+  hard_failures[]
+  warnings[]
+  per_experience_results[]
+  metrics
 
-`hr_reviewing → auditing` is used for an existing-fact revision; HR may also return to selection or stop with missing-fact questions. HR failure blocks approval.
+CurrentPointer
+  status = approved | stale | no_approved_content
+  approved_run_id?
+  content_sha256?
+  user_approval_id?
 
-`failed` is an execution failure state. `stale` applies when a fact referenced by an approved run changes.
+RunStatusRecord
+  run_id
+  content_sha256
+  status
+  reason_code
+  recorded_at
+```
 
-Schema 1.3 is the V1.4 target and becomes the default for new runs only after T20 is completed. Schema 1.0–1.2 runs remain readable and are never migrated or rewritten in place.
+## State and compatibility
 
-## Implementation
+The active path is `not_started → analyzing → needs_input/awaiting_selection_approval → drafting → auditing → hr_reviewing → ready_for_user_review → approved`, with `quality_failed` after the third failed generation candidate.
 
-The models, strict enumerations, cross-field validators, transition guard, and JSON Schema exporter are implemented in `scripts/models.py`. Immutable storage lives in `scripts/storage.py`, fact parsing/migration in `scripts/fact_library.py`, deterministic hard gates in `scripts/validators.py`, the run-directory CLI verifier in `scripts/validate_run.py`, and the content-only state machine orchestration in `scripts/orchestrator.py`.
+Schema 1.0–1.4 artifacts remain readable and immutable. Official entrypoints reject new approvals for them. A blocking run-status record overrides an older `run.json` approval field.
+
+## Implementation locations
+
+- Models and schema export: `scripts/models.py`
+- Official coordinator CLI: `scripts/custom_resume_cli.py`
+- State-machine helpers: `scripts/orchestrator.py`
+- Deterministic gates: `scripts/validators.py`
+- Rendering: `scripts/rendering.py`
+- Immutable storage, receipt/hash approval validation, and status ledger: `scripts/storage.py`
+- Run-directory verifier: `scripts/validate_run.py`

@@ -88,6 +88,19 @@
           "title": "Requirement Ids",
           "type": "array"
         },
+        "intent_id": {
+          "anyOf": [
+            {
+              "pattern": "^INT-[0-9]{3}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Intent Id"
+        },
         "primary_value": {
           "minLength": 1,
           "title": "Primary Value",
@@ -163,6 +176,32 @@
       "title": "ResumeSectionName",
       "type": "string"
     },
+    "RoleFamily": {
+      "enum": [
+        "ai_product_manager",
+        "game_production_pm",
+        "community_operations",
+        "community_product_manager",
+        "game_designer"
+      ],
+      "title": "RoleFamily",
+      "type": "string"
+    },
+    "RoleTrack": {
+      "enum": [
+        "community",
+        "content",
+        "growth",
+        "integrated",
+        "system",
+        "combat",
+        "writing",
+        "narrative",
+        "general"
+      ],
+      "title": "RoleTrack",
+      "type": "string"
+    },
     "SourceDigests": {
       "additionalProperties": false,
       "properties": {
@@ -207,12 +246,14 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "default": "1.3",
+      "default": "1.5",
       "enum": [
         "1.0",
         "1.1",
         "1.2",
-        "1.3"
+        "1.3",
+        "1.4",
+        "1.5"
       ],
       "title": "Schema Version",
       "type": "string"
@@ -229,6 +270,21 @@
     },
     "source_digests": {
       "$ref": "#/$defs/SourceDigests"
+    },
+    "role_family": {
+      "$ref": "#/$defs/RoleFamily",
+      "default": "ai_product_manager"
+    },
+    "role_track": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RoleTrack"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "agent": {
       "$ref": "#/$defs/DraftAgent"

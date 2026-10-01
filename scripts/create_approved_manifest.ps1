@@ -1,6 +1,6 @@
 <#
 将已审阅草案冻结为不可变批准清单。仅在用户在对话中明确批准具体公司、岗位和当前附件后运行。
-默认 -DryRun，只验证，不写入 jobs/approved。
+默认 Dry Run，只验证，不写入 jobs/approved。
 #>
 [CmdletBinding()]
 param(
@@ -10,44 +10,55 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot 'approval_manifest_common.ps1')
+
 if ($ApprovalStatement.Trim().Length -lt 8) { throw '批准说明过短；需要记录用户对具体岗位和当前附件的明确批准。' }
 $draftFile = Get-Item -LiteralPath $DraftPath
-$draft = Get-Content -LiteralPath $draftFile.FullName -Raw | ConvertFrom-Json
-if ($draft.status -ne 'ready_for_user_approval') { throw "草案状态不是 ready_for_user_approval：$($draft.status)" }
-foreach ($field in 'company','job_title','normalized_url','application_url','mode') {
-  if ([string]::IsNullOrWhiteSpace([string]$draft.$field)) { throw "草案缺少字段：$field" }
-}
-
-$base = $draftFile.DirectoryName
-foreach ($artifactName in 'jd','resume') {
-  $artifact = $draft.$artifactName
-  if (-not $artifact -or [string]::IsNullOrWhiteSpace($artifact.path) -or [string]::IsNullOrWhiteSpace($artifact.sha256)) {
-    throw "草案缺少 $artifactName 的路径或哈希。"
-  }
-  $artifactPath = Join-Path $base $artifact.path
-  if (-not (Test-Path -LiteralPath $artifactPath)) { throw "未找到 $artifactName：$artifactPath" }
-  $actualHash = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash
-  if ($actualHash -ne $artifact.sha256) { throw "$artifactName 哈希不一致；必须重新审阅并生成新草案。" }
-}
+$validation = Test-ApplicationDraft $draftFile
+$draft = $validation.draft
+$root = $validation.project_root
+$rootPrefix = $root.TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+if (-not $draftFile.FullName.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) { throw '草案路径不在项目目录内。' }
+$relativeDraftPath = $draftFile.FullName.Substring($rootPrefix.Length) -replace '\\','/'
+$approvedRunId = if ($validation.content_provenance.Contains('approved_run_id')) { $validation.content_provenance['approved_run_id'] } else { $null }
 
 $approved = [ordered]@{
-  schema_version = 1
+  schema_version = 2
   status = 'approved'
   approved_at = (Get-Date).ToString('o')
   approval_statement = $ApprovalStatement
-  source_draft_sha256 = (Get-FileHash -LiteralPath $draftFile.FullName -Algorithm SHA256).Hash
+  source_draft_path = $relativeDraftPath
+  source_draft_sha256 = (Get-FileHash -LiteralPath $draftFile.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+  content_provenance = $validation.content_provenance
   manifest = $draft
 }
 $slug = (($draft.company + '-' + $draft.job_title) -replace '[^\p{L}\p{N}\-]+','-').Trim('-').ToLowerInvariant()
 if ([string]::IsNullOrWhiteSpace($slug)) { $slug = 'application' }
-$root = Split-Path -Parent (Split-Path -Parent $base)
 $targetDir = Join-Path $root 'jobs\approved'
-$target = Join-Path $targetDir ("{0}-{1}.json" -f $slug, (Get-Date -Format 'yyyyMMddHHmmss'))
+$target = Join-Path $targetDir ("{0}-{1}.json" -f $slug, (Get-Date -Format 'yyyyMMddHHmmssfff'))
 
 if (-not $Commit) {
-  [pscustomobject]@{ status='dry_run_pass'; target=$target; company=$draft.company; job_title=$draft.job_title; resume_sha256=$draft.resume.sha256; jd_sha256=$draft.jd.sha256 } | ConvertTo-Json -Compress
+  [pscustomobject]@{
+    status = 'dry_run_pass'
+    target = $target
+    company = $draft.company
+    job_title = $draft.job_title
+    content_pipeline = $validation.content_provenance.content_pipeline
+    approved_run_id = $approvedRunId
+    resume_sha256 = $validation.artifacts.resume.sha256
+    jd_sha256 = $validation.artifacts.jd.sha256
+  } | ConvertTo-Json -Compress
   return
 }
 New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
-$approved | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $target -Encoding utf8NoBOM -NoNewline
-[pscustomobject]@{ status='approved'; path=$target; resume_sha256=$draft.resume.sha256; jd_sha256=$draft.jd.sha256 } | ConvertTo-Json -Compress
+if (Test-Path -LiteralPath $target) { throw '批准清单目标已存在；拒绝覆盖不可变清单。' }
+$approved | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $target -Encoding utf8NoBOM -NoNewline
+[pscustomobject]@{
+  status = 'approved'
+  path = $target
+  content_pipeline = $validation.content_provenance.content_pipeline
+  approved_run_id = $approvedRunId
+  resume_sha256 = $validation.artifacts.resume.sha256
+  jd_sha256 = $validation.artifacts.jd.sha256
+} | ConvertTo-Json -Compress

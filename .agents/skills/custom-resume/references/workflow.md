@@ -1,49 +1,59 @@
-# Custom Resume Workflow Contract
+# Custom Resume Schema 1.5 Workflow
 
-This reference is the runtime summary of the confirmed V1.4 workflow. `docs/custom-resume-agent/PRD.md` and `ARCHITECTURE.md` remain authoritative.
+This file describes the workflow implemented by `scripts/custom_resume_cli.py`. Schema 1.0–1.4 runs are read-only and cannot receive a new approval.
 
 ## Scope
 
-- One Chinese AI product manager or game-production PM JD per run.
-- Content analysis, drafting, fusion, audit, and content approval only.
-- No HTML, PDF, visual QA, ATS page checks, application filling, or submission.
+- Tailor resume content for one supported Chinese JD.
+- Produce and review structured content artifacts only.
+- Do not create HTML/PDF, perform visual QA, fill applications, or submit jobs.
 
-## Required sequence
+## Official entrypoint
 
-1. Normalize an application directory, pasted JD, or JD URL.
-2. Confirm `ai_product_manager` or `game_production_pm`; freeze JD, fact-library, preference, and selected reference-card digests.
-3. Qualify reference research with a real resume/content sample, official role source, and sanitized selection rules; otherwise obtain explicit degraded approval.
-4. Analyze the JD and build an ideal evidence blueprint.
-5. Map requirements to confirmed facts and evidence levels.
-6. Ask at most five high-value, option-style fact questions when needed.
-7. Present one consolidated fact diff; write it only after explicit user confirmation.
-   After an approved add/replace write, freeze the result hash and rerun analysis against the updated fact snapshot before selection approval.
-8. Scan eight capability categories for every eligible experience. Persist fact-backed direct/adjacent/analogical transfer chains and zero-credit candidate questions in `capability-transfer-map.json`.
-9. Score the complete pool on separate job-match and portfolio-value axes; recompute transfer credits, tiers, caps, work/variety constraints, any section-balance override, and bullet budgets. Run an independent exact-row pre-draft opportunity-cost audit.
-10. Obtain user approval for experience selection, approved transfer IDs, bullet allocation, any override, and known gaps.
-   Persist `needs_input`, `awaiting_selection_approval`, and approved `drafting` gates as a recoverable checkpoint before yielding for user input.
-11. Run Writer and ASu Writer in isolated read-only contexts using only approved experiences, facts, and non-candidate transfer chains.
-12. Fuse at bullet level without restoring excluded experiences or transfer chains.
-13. Run deterministic validation, then a fresh post-fusion opportunity-cost, truth, and base-quality audit.
-14. After the base audit passes, run a fresh strict HR decision review. Require `strong_push` and >=8.5 overall and in all five decision dimensions.
-15. Route a failed HR review to existing-fact revision, missing-fact questions, or reselection. Every revision reruns deterministic validation, the base Auditor, and a fresh HR Reviewer; at most twice.
-16. Present fusion content, decision differences, base audit, and HR review for human content approval. HR failure blocks approval.
+Only `custom_resume_cli.py start|record|advance|approve|revoke|status` may advance a Schema 1.5 run. The coordinator validates every imported artifact and its `AgentInvocationReceipt`; agent-authored pass fields do not write state.
+
+## Execution sequence
+
+1. `start` freezes the JD, fact library, preferences, and selected reference hashes.
+2. JD analysis, evidence mapping, capability transfer, experience selection, selection audit, and `story-plan.json` are recorded.
+3. Selection covers 1–4 WORK/PROJECT experiences in total. Any proposed bullet count is an advisory layout estimate derived from semantic units, never a gate. There is no minimum WORK count, section-balance padding, or low-score WORK exception.
+4. The user approves the exact selection and story-plan hashes in `selection-user-approval.json`.
+5. Writer and ASu Writer independently write against the same story plan. Each bullet binds `experience_id`, `intent_id`, and `fact_ids`.
+6. Each draft passes deterministic validation and a fresh independent draft Auditor before it may enter Fusion.
+7. Fusion uses only passing draft content, then passes deterministic validation, an independent post-fusion Auditor, and HR review.
+8. Passing HR means `ready_for_user_review`. It does not approve content.
+9. `approve` records the user's approval of the final content hash, verifies the full artifact/receipt/hash chain, commits the immutable run, and updates `current.json`.
+
+## Story contract
+
+Each selected experience has one `story_thesis`, capability IDs, context/action/method/challenge/result evidence buckets, one or more different bullet intents, and an internal ownership guard. Intent count follows the evidence story rather than a fixed bullet quota. The rendered resume must not contain the ownership guard or negative responsibility disclaimers.
+
+Across an experience's bullets, the content must cover context/problem, action/method, and result/impact. A selected experience without at least one action fact and one result/impact fact is removed, merged only with the same real subject, or routed to `needs_input`.
+
+## Retry loop
+
+`MAX_GENERATION_ROUNDS = 3`: the initial candidate plus at most two repaired candidates.
+
+- Selection or story defects return to Story Plan.
+- A defect isolated to one Writer rewrites only that lane.
+- Fusion, language, duplication, and HR defects rewrite Fusion.
+- Fact conflicts stop in `needs_input`.
+- A third failed candidate ends as `quality_failed`; it cannot be force-approved.
+
+Every retry archives the superseded artifacts and keeps their receipt-bound hashes in the committed history.
 
 ## Hard gates
 
-- The confirmed Markdown fact library is the only source for clean claims.
-- Every clean bullet cites valid fact IDs.
-- Education and skill facts are passed as fixed baseline content; only WORK/PROJECT experiences compete in selection scoring and bullet quotas.
-- Every eligible work/project experience is scored; affinity-only evidence is capped below selection, auxiliary bullets are at most 25%, and omitted core experience has a user-confirmed reason.
-- Every eligible experience has eight explicit capability scans; candidate chains score zero and never reach Writers.
-- Job-match and portfolio scores stay separate; same-group personal projects are limited to two, at least two WORK entries are selected when available, and one low-score WORK exception requires an approved auditable override.
-- Education exactly copies the confirmed baseline; self-ability entries are exactly 专业硬技能、综合软技能、游戏体验、语言能力.
-- 14 experience bullets and 1,500 Chinese characters are maxima, not minimum targets.
-- Unconfirmed candidates never enter clean content.
-- A passing base audit cannot bypass HR review; `push|hesitate|reject` fail the high-standard decision gate.
-- Content approval never changes the application status or triggers downstream files.
-- If subagents are unavailable, pause and ask whether to retry or explicitly degrade.
+- Every WORK/PROJECT experience contains non-empty content, covers each approved intent once, and avoids duplicate split bullets; bullet count itself is not graded.
+- HR admission requires at least 1,200 Chinese characters overall, at least 180 in each core experience, and at least 120 in each auxiliary experience.
+- Resume text cannot contain negative-boundary or internal-workflow phrases configured in `validators.py`.
+- A bullet identical to one source fact fails. Similarity >=0.90 with only one fact and no cross-element synthesis fails; 0.80–0.90 warns.
+- New facts, numbers, or unsupported ownership still fail deterministic fact validation.
+- HR must return `strong_push`, overall >=9.0, every decision dimension >=8.0, and cite concrete experience and bullet IDs.
+- Quality gate, both Auditors, HR, receipts, content rendering, and all hashes must agree.
+- `approved` requires a separate user approval bound to the final content hash.
+- `user_rejected`, `schema_invalid`, `revoked`, and `superseded` statuses block current content and downstream use.
 
-## Current availability
+## Release state
 
-T02–T11 implement the standalone content-only workflow and fixed AI PM evaluation. T13 adds the authorized game-production role family. T20's independent HR decision gate is implemented for review but remains unavailable until T20 is completed; T12 alone controls legacy-default cutover.
+Schema 1.5 code is implemented but remains pending product acceptance with a new real target JD. It must not automatically approve a real job before that acceptance.

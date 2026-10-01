@@ -1,0 +1,12 @@
+{
+  "company": "美团",
+  "target_role": "AI产品Builder",
+  "role_family": "ai_product_manager",
+  "role_track": null,
+  "context": "non_game",
+  "requirements": [
+    {"requirement_id": "REQ-AI-01", "text": "AI 产品与工作流设计", "fact_ids": ["FACT-SKILL-001-04"]},
+    {"requirement_id": "REQ-AI-02", "text": "技术理解与原型实现", "fact_ids": ["FACT-SKILL-001-03"]},
+    {"requirement_id": "REQ-AI-03", "text": "独立推进与结果负责", "fact_ids": ["FACT-SKILL-001-22"]}
+  ]
+}

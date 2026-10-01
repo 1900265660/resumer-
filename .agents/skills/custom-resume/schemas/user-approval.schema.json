@@ -1,0 +1,45 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.5",
+      "default": "1.5",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "user_approval_id": {
+      "pattern": "^user_approval_[a-f0-9]{32}$",
+      "title": "User Approval Id",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^cr_[0-9]{8}T[0-9]{6}_[a-z0-9]{6}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "content_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Content Sha256",
+      "type": "string"
+    },
+    "approved_at": {
+      "format": "date-time",
+      "title": "Approved At",
+      "type": "string"
+    },
+    "source": {
+      "const": "explicit_user_message",
+      "default": "explicit_user_message",
+      "title": "Source",
+      "type": "string"
+    }
+  },
+  "required": [
+    "user_approval_id",
+    "run_id",
+    "content_sha256",
+    "approved_at"
+  ],
+  "title": "UserApprovalRecord",
+  "type": "object"
+}

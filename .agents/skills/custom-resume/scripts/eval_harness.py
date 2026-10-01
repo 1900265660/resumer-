@@ -11,7 +11,14 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from fact_library import parse_fact_records
-from models import CapabilityCategory, CapabilityTransferMapArtifact, TransferDistance
+from models import (
+    CapabilityCategory,
+    CapabilityTransferMapArtifact,
+    RoleFamily,
+    RoleTrack,
+    TransferDistance,
+    validate_role_route,
+)
 from validators import extract_numeric_claims
 
 
@@ -22,7 +29,26 @@ FIXED_CATEGORIES = {
     "consumer_commerce_content",
     "technical_capability_gap",
 }
-SUPPORTED_EVAL_CATEGORIES = FIXED_CATEGORIES | {"game_production_pm"}
+COMMUNITY_EVAL_CATEGORIES = {
+    "community_operations_community",
+    "community_operations_content",
+    "community_operations_growth",
+    "community_operations_integrated",
+    "community_product_manager",
+}
+GAME_DESIGNER_EVAL_CATEGORIES = {
+    "game_designer_system",
+    "game_designer_combat",
+    "game_designer_writing",
+    "game_designer_narrative",
+    "game_designer_general",
+}
+SUPPORTED_EVAL_CATEGORIES = (
+    FIXED_CATEGORIES
+    | {"game_production_pm"}
+    | COMMUNITY_EVAL_CATEGORIES
+    | GAME_DESIGNER_EVAL_CATEGORIES
+)
 DIMENSIONS = ("jd_coverage", "evidence_depth", "hr_scan", "language_naturalness")
 V12_DIMENSIONS = (*DIMENSIONS, "selection_quality")
 AI_FIXED_PROMPTS = {
@@ -45,6 +71,28 @@ GAME_EXTENSION_PROMPTS = {
     "experience-selection.md",
     "selection-audit.md",
 }
+COMMUNITY_EXTENSION_PROMPTS = {
+    "asu-writer.md",
+    "auditor.md",
+    "fusion.md",
+    "jd-analysis-community.md",
+    "writer.md",
+    "capability-transfer.md",
+    "experience-selection.md",
+    "selection-audit.md",
+    "hr-reviewer.md",
+}
+GAME_DESIGNER_EXTENSION_PROMPTS = {
+    "asu-writer-game-designer.md",
+    "auditor.md",
+    "fusion.md",
+    "jd-analysis-game-designer.md",
+    "writer-game-designer.md",
+    "capability-transfer.md",
+    "experience-selection.md",
+    "selection-audit.md",
+    "hr-reviewer.md",
+}
 FIXED_SECTIONS = ("教育经历", "实习/工作经历", "实践经历", "自我能力")
 PHONE_RE = re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
@@ -60,10 +108,29 @@ class EvalCase(EvalModel):
     category: str
     company: str
     role: str
+    role_family: RoleFamily | None = None
+    role_track: RoleTrack | None = None
     expected_hard_gap: bool
     jd_path: Path
     jd_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     fact_snapshot_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def community_cases_require_exact_role_route(self) -> "EvalCase":
+        if self.category in COMMUNITY_EVAL_CATEGORIES | GAME_DESIGNER_EVAL_CATEGORIES:
+            if self.role_family is None:
+                raise ValueError("V1.5 eval case requires role_family")
+            validate_role_route("1.4", self.role_family, self.role_track)
+            expected_category = (
+                self.role_family.value
+                if self.role_track is None
+                else f"{self.role_family.value}_{self.role_track.value}"
+            )
+            if self.category != expected_category:
+                raise ValueError("V1.5 eval category does not match role route")
+        elif self.role_family is not None or self.role_track is not None:
+            raise ValueError("legacy eval case must not define a V1.5 role route")
+        return self
 
 
 class EvalSuite(EvalModel):
@@ -264,6 +331,10 @@ def deterministic_plan(
         prompt_names.update(AI_FIXED_PROMPTS)
     if "game_production_pm" in categories:
         prompt_names.update(GAME_EXTENSION_PROMPTS)
+    if categories & COMMUNITY_EVAL_CATEGORIES:
+        prompt_names.update(COMMUNITY_EXTENSION_PROMPTS)
+    if categories & GAME_DESIGNER_EVAL_CATEGORIES:
+        prompt_names.update(GAME_DESIGNER_EXTENSION_PROMPTS)
     prompt_hashes = {
         path.name: sha256_bytes(path.read_bytes())
         for path in sorted(prompt_root.glob("*.md"))

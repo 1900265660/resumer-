@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "fast-hr-review.schema.json",
+  "title": "Four-gate fast resume HR review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "generation_round", "decision", "checks", "exact_repairs", "requires_manual_review"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "generation_round": {"type": "integer", "minimum": 1, "maximum": 2},
+    "decision": {"enum": ["pass", "repair"]},
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["position_context", "relevance", "truth_and_contact", "supported_capability_coverage"],
+      "properties": {
+        "position_context": {"$ref": "#/$defs/check"},
+        "relevance": {"$ref": "#/$defs/check"},
+        "truth_and_contact": {"$ref": "#/$defs/check"},
+        "supported_capability_coverage": {"$ref": "#/$defs/check"}
+      }
+    },
+    "exact_repairs": {"type": "array", "items": {"$ref": "#/$defs/repair"}},
+    "requires_manual_review": {"type": "boolean"}
+  },
+  "$defs": {
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["passed", "findings"],
+      "properties": {"passed": {"type": "boolean"}, "findings": {"type": "array", "items": {"type": "string"}}}
+    },
+    "repair": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate", "location", "problem", "replacement_or_action"],
+      "properties": {
+        "gate": {"enum": ["position_context", "relevance", "truth_and_contact", "supported_capability_coverage"]},
+        "location": {"type": "string", "minLength": 1},
+        "problem": {"type": "string", "minLength": 1},
+        "replacement_or_action": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "case_id": "game-designer-system",
+  "category": "game_designer_system",
+  "company": "示例游戏工作室",
+  "role": "系统策划",
+  "role_family": "game_designer",
+  "role_track": "system",
+  "expected_hard_gap": false
+}

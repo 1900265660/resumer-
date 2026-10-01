@@ -10,10 +10,20 @@ from typing import Any, Sequence
 
 from pydantic import BaseModel
 
+from exemplar_library import (
+    ExemplarLibraryError,
+    ResumeExemplarMatch,
+    exemplar_bundle_sha256,
+    load_matching_resume_exemplars,
+)
 from fact_library import ExperienceRecord, FactRecord, apply_fact_diff
+from rendering import render_resume_markdown
 from models import (
     AgentFailureArtifact,
+    AgentInvocationReceipt,
+    AgentReceiptBundleArtifact,
     AgentRole,
+    AgentStage,
     AuditArtifact,
     AuditDisposition,
     CandidateSuggestion,
@@ -23,6 +33,7 @@ from models import (
     DeterministicValidationArtifact,
     DraftAgent,
     DraftArtifact,
+    DraftQualityAuditArtifact,
     EvidenceMapArtifact,
     ExperienceSelectionArtifact,
     ExperienceTier,
@@ -31,13 +42,18 @@ from models import (
     FusionArtifact,
     HrReviewArtifact,
     HrReviewDisposition,
+    UncitedFactDisposition,
     JDAnalysisArtifact,
     NormalizedInputPacket,
     ReferenceResearchArtifact,
     ReferenceResearchMode,
     ResumeSectionName,
     RoleFamily,
+    RoleTrack,
     RunCheckpointArtifact,
+    StoryPlanArtifact,
+    UserApprovalRecord,
+    MAX_GENERATION_ROUNDS,
     SCHEMA_VERSION,
     RunManifestArtifact,
     SelectionAuditArtifact,
@@ -47,6 +63,8 @@ from models import (
     SourceType,
     TransferDistance,
     assert_state_transition,
+    self_ability_headings_for_role,
+    validate_role_route,
 )
 from storage import (
     RunStage,
@@ -57,7 +75,11 @@ from storage import (
     remove_checkpoint,
     save_checkpoint,
 )
-from validators import validate_fusion_content, validate_run_artifact_completeness
+from validators import (
+    selection_decision_sha256,
+    validate_fusion_content,
+    validate_run_artifact_completeness,
+)
 
 
 class OrchestrationError(RuntimeError):
@@ -66,6 +88,23 @@ class OrchestrationError(RuntimeError):
 
 class HumanGateError(OrchestrationError):
     pass
+
+
+class RoleStrategyPendingError(HumanGateError):
+    def __init__(self, role_family: RoleFamily, role_track: RoleTrack | None):
+        self.role_family = role_family
+        self.role_track = role_track
+        super().__init__(
+            f"role_strategy_pending: {role_family.value}"
+            + (f"/{role_track.value}" if role_track else "")
+        )
+
+    def result(self) -> dict[str, str | None]:
+        return {
+            "status": "role_strategy_pending",
+            "role_family": self.role_family.value,
+            "role_track": self.role_track.value if self.role_track else None,
+        }
 
 
 class AgentHandoffError(OrchestrationError):
@@ -82,7 +121,300 @@ WINDOWS_INVALID = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 REFERENCE_CARDS = {
     RoleFamily.AI_PRODUCT_MANAGER: "ai-pm-method-cards.md",
     RoleFamily.GAME_PRODUCTION_PM: "game-production-pm-method-cards.md",
+    RoleFamily.COMMUNITY_OPERATIONS: "community-operations-method-cards.md",
+    RoleFamily.COMMUNITY_PRODUCT_MANAGER: "community-product-method-cards.md",
+    RoleFamily.GAME_DESIGNER: "game-designer-method-cards.md",
 }
+ROLE_PROMPT_ROUTES = {
+    RoleFamily.AI_PRODUCT_MANAGER: {
+        "jd_analysis": "jd-analysis.md",
+        "story_planner": "story-planner.md",
+        "writer": "writer.md",
+        "asu_writer": "asu-writer.md",
+    },
+    RoleFamily.GAME_PRODUCTION_PM: {
+        "jd_analysis": "jd-analysis-game-production.md",
+        "story_planner": "story-planner.md",
+        "writer": "writer-game-production.md",
+        "asu_writer": "asu-writer-game-production.md",
+    },
+    RoleFamily.COMMUNITY_OPERATIONS: {
+        "jd_analysis": "jd-analysis-community.md",
+        "story_planner": "story-planner.md",
+        "writer": "writer.md",
+        "asu_writer": "asu-writer.md",
+    },
+    RoleFamily.COMMUNITY_PRODUCT_MANAGER: {
+        "jd_analysis": "jd-analysis-community.md",
+        "story_planner": "story-planner.md",
+        "writer": "writer.md",
+        "asu_writer": "asu-writer.md",
+    },
+    RoleFamily.GAME_DESIGNER: {
+        "jd_analysis": "jd-analysis-game-designer.md",
+        "story_planner": "story-planner.md",
+        "writer": "writer-game-designer.md",
+        "asu_writer": "asu-writer-game-designer.md",
+    },
+}
+
+
+def role_prompt_route(role_family: RoleFamily) -> dict[str, str]:
+    route = ROLE_PROMPT_ROUTES.get(role_family)
+    if route is None:
+        raise RoleStrategyPendingError(role_family, None)
+    return dict(route)
+
+
+def role_content_guidance(
+    role_family: RoleFamily,
+    role_track: RoleTrack | None = None,
+) -> dict[str, Any]:
+    validate_role_route(SCHEMA_VERSION, role_family, role_track)
+    if role_family is RoleFamily.AI_PRODUCT_MANAGER:
+        return {}
+    if role_family is RoleFamily.GAME_DESIGNER:
+        assert role_track is not None
+        track_guidance = {
+            RoleTrack.SYSTEM: {
+                "required_actions": [
+                    "rule_or_loop_design",
+                    "resource_or_configuration_design",
+                    "prototype_or_specification",
+                    "validation_and_iteration",
+                ],
+                "adjacent_is_not_direct": [
+                    "play_history_or_review_is_not_system_design",
+                    "qa_observation_is_not_rule_ownership",
+                ],
+            },
+            RoleTrack.COMBAT: {
+                "required_actions": [
+                    "control_skill_ai_or_encounter_design",
+                    "parameter_or_behavior_specification",
+                    "combat_playtest_debug_and_iteration",
+                ],
+                "adjacent_is_not_direct": [
+                    "mod_or_quality_testing_is_not_combat_design",
+                    "balance_commentary_is_not_parameter_ownership",
+                ],
+            },
+            RoleTrack.WRITING: {
+                "required_actions": [
+                    "original_game_text_creation",
+                    "brief_style_or_content_specification",
+                    "editorial_implementation_or_delivery",
+                ],
+                "adjacent_is_not_direct": [
+                    "translation_is_not_original_game_writing",
+                    "ordinary_writing_is_not_game_text_ownership",
+                ],
+            },
+            RoleTrack.NARRATIVE: {
+                "required_actions": [
+                    "narrative_structure_or_character_arc",
+                    "quest_chain_branch_or_state_design",
+                    "performance_or_implementation_collaboration",
+                    "player_experience_validation",
+                ],
+                "adjacent_is_not_direct": [
+                    "linear_writing_is_not_branching_narrative",
+                    "content_analysis_is_not_quest_chain_design",
+                ],
+            },
+            RoleTrack.GENERAL: {
+                "required_actions": [
+                    "direct_design_actions_from_at_least_two_tracks",
+                    "explicit_primary_and_secondary_design_evidence",
+                    "validation_for_each_claimed_track",
+                ],
+                "adjacent_is_not_direct": [
+                    "general_does_not_fill_missing_design_ownership",
+                    "player_content_or_qa_breadth_is_not_multi_track_design",
+                ],
+            },
+        }[role_track]
+        return {
+            "strategy_status": "released",
+            "role_route": {
+                "role_family": role_family.value,
+                "role_track": role_track.value,
+                "adjacent_evidence_does_not_become_direct_ownership": True,
+            },
+            "evidence_strategy": track_guidance,
+            "writing_boundary": {
+                "require_personal_design_action_or_artifact": True,
+                "require_validation_method_when_claimed": True,
+                "use_writable_scope_for_adjacent_evidence": True,
+                "ask_or_narrow_when_design_ownership_is_missing": True,
+            },
+            "self_ability": {
+                "third_heading": self_ability_headings_for_role(role_family)[2],
+                "source": "current_frozen_fact_snapshot",
+            },
+        }
+    if role_family is RoleFamily.COMMUNITY_OPERATIONS:
+        assert role_track is not None
+        track_guidance = {
+            RoleTrack.COMMUNITY: {
+                "required_actions": [
+                    "member_relationship_or_service",
+                    "community_mechanism_or_moderation",
+                    "activity_or_feedback_loop",
+                ],
+                "credible_results": [
+                    "community_health",
+                    "member_satisfaction",
+                    "issue_resolution",
+                    "participation_quality",
+                ],
+                "adjacent_is_not_direct": [
+                    "publishing_volume_is_not_community_health",
+                    "community_size_is_not_health_improvement",
+                ],
+            },
+            RoleTrack.CONTENT: {
+                "required_actions": [
+                    "topic_or_editorial_planning",
+                    "production_or_editing",
+                    "distribution_or_governance",
+                ],
+                "credible_results": [
+                    "content_quality",
+                    "reach_or_consumption",
+                    "production_efficiency",
+                ],
+                "adjacent_is_not_direct": [
+                    "content_output_is_not_growth_experiment",
+                    "reach_is_not_conversion_or_retention",
+                ],
+            },
+            RoleTrack.GROWTH: {
+                "required_actions": [
+                    "defined_funnel_stage",
+                    "hypothesis_or_experiment",
+                    "channel_or_growth_action",
+                    "metric_definition_and_result",
+                ],
+                "credible_results": [
+                    "activation",
+                    "conversion",
+                    "retention",
+                    "recall",
+                ],
+                "adjacent_is_not_direct": [
+                    "content_traffic_is_not_growth_ownership",
+                    "community_scale_is_not_funnel_improvement",
+                    "activity_delivery_is_not_retention_result",
+                ],
+            },
+            RoleTrack.INTEGRATED: {
+                "required_actions": [
+                    "direct_actions_from_at_least_two_operations_tracks",
+                    "explicit_primary_and_secondary_evidence",
+                ],
+                "credible_results": [
+                    "track_specific_results_with_separate_definitions",
+                ],
+                "adjacent_is_not_direct": [
+                    "integrated_does_not_fill_a_missing_track",
+                    "shared_platform_or_metric_is_not_multi_track_ownership",
+                ],
+            },
+        }[role_track]
+        return {
+            "strategy_status": "released",
+            "role_route": {
+                "role_family": role_family.value,
+                "role_track": role_track.value,
+                "adjacent_evidence_does_not_become_direct_ownership": True,
+            },
+            "evidence_strategy": track_guidance,
+            "writing_boundary": {
+                "state_personal_action_and_result_scope": True,
+                "use_writable_scope_for_adjacent_evidence": True,
+                "ask_or_narrow_when_required_actions_are_missing": True,
+            },
+            "self_ability": {
+                "third_heading": self_ability_headings_for_role(role_family)[2],
+                "source": "current_frozen_fact_snapshot",
+            },
+        }
+    if role_family is RoleFamily.COMMUNITY_PRODUCT_MANAGER:
+        return {
+            "strategy_status": "released",
+            "role_route": {
+                "role_family": role_family.value,
+                "role_track": None,
+                "adjacent_evidence_does_not_become_direct_ownership": True,
+            },
+            "evidence_strategy": {
+                "required_product_actions": [
+                    "user_problem_or_research",
+                    "requirement_or_solution_definition",
+                    "rule_or_interaction_design",
+                    "delivery_iteration_or_validation",
+                ],
+                "operations_as_adjacent_only": [
+                    "community_service_or_moderation",
+                    "content_publishing",
+                    "activity_delivery",
+                    "feedback_collection_without_product_decision",
+                ],
+                "ownership_ceiling": (
+                    "do not claim product ownership without fact-backed product action "
+                    "and personal decision boundary"
+                ),
+            },
+            "writing_boundary": {
+                "state_personal_action_and_result_scope": True,
+                "use_writable_scope_for_operations_evidence": True,
+                "ask_or_narrow_when_product_actions_are_missing": True,
+            },
+            "self_ability": {
+                "third_heading": self_ability_headings_for_role(role_family)[2],
+                "source": "current_frozen_fact_snapshot",
+            },
+        }
+    return {
+        "fact_freshness": {
+            "source": "current_frozen_fact_snapshot",
+            "prior_resume_or_run_is_not_a_fact_source": True,
+            "rerun_analysis_after_fact_digest_change": True,
+            "prefer_latest_confirmed_exact_values": True,
+        },
+        "whole_resume_story": [
+            "WORK proves planning, coordination, process/quality, and risk handling",
+            "game PROJECT proves direct workflow, delivery, testing, localization, or iteration",
+            "游戏经历 proves target-product interest and selective category breadth only",
+            "语言能力 states supported reusable work scenarios without copying project metrics",
+        ],
+        "game_history": {
+            "generic_player_labels_are_insufficient_when_specific_facts_exist": True,
+            "selection_priority": [
+                "target_company_or_title",
+                "accurately_labelled_adjacent_products_or_long_term_forms",
+                "verified_depth_signals",
+                "new_category_or_hiring_signal",
+                "differentiation_and_current_relevance",
+            ],
+            "hours_alone_do_not_determine_selection": True,
+            "preferred_structure": (
+                "target depth first; use a second bullet for confirmed breadth and "
+                "selective category representatives when one line would hide the hierarchy"
+            ),
+            "avoid": [
+                "genre overclaim",
+                "inventory-style game lists",
+                "project/self-ability duplication without a distinct hiring purpose",
+                "inferring product or commercialization competence from play history",
+            ],
+        },
+        "language_ability": {
+            "lead_with_confirmed_credential": True,
+            "prefer_supported_work_actions_over_repeated_project_counts": True,
+        },
+    }
 
 
 def sha256_bytes(value: bytes) -> str:
@@ -132,6 +464,7 @@ class NormalizedRunInput:
     fact_text: str
     preferences_text: str
     reference_cards_text: str
+    resume_exemplars: tuple[ResumeExemplarMatch, ...] = ()
 
 
 def normalize_run_input(
@@ -146,9 +479,14 @@ def normalize_run_input(
     now: datetime | None = None,
     run_id: str | None = None,
     role_family: RoleFamily = RoleFamily.AI_PRODUCT_MANAGER,
+    role_track: RoleTrack | None = None,
     schema_version: str = SCHEMA_VERSION,
 ) -> NormalizedRunInput:
     repo_root = repo_root.resolve()
+    try:
+        validate_role_route(schema_version, role_family, role_track)
+    except ValueError as error:
+        raise OrchestrationError(str(error)) from error
     timestamp = now or datetime.now(timezone.utc)
     if source_type is SourceType.DIRECTORY:
         if application_dir is None:
@@ -208,12 +546,23 @@ def normalize_run_input(
     fact_bytes = fact_path.read_bytes()
     preferences_bytes = preferences_path.read_bytes()
     reference_bytes = reference_path.read_bytes()
+    try:
+        resume_exemplars = load_matching_resume_exemplars(
+            repo_root,
+            role_family=role_family.value,
+            role_track=role_track.value if role_track else None,
+            jd_text=content,
+        )
+    except ExemplarLibraryError as error:
+        raise OrchestrationError(str(error)) from error
     actual_run_id = run_id or create_run_id(timestamp)
     digests = SourceDigests(
         jd_sha256=sha256_bytes(content.encode("utf-8")),
         fact_snapshot_sha256=sha256_bytes(fact_bytes),
         preferences_sha256=sha256_bytes(preferences_bytes),
-        reference_cards_sha256=sha256_bytes(reference_bytes),
+        reference_cards_sha256=exemplar_bundle_sha256(
+            reference_bytes, resume_exemplars
+        ),
     )
     packet = NormalizedInputPacket(
         schema_version=schema_version,
@@ -224,6 +573,7 @@ def normalize_run_input(
         source_type=source_type,
         source_locator=source_locator,
         role_family=role_family,
+        role_track=role_track,
     )
     return NormalizedRunInput(
         packet=packet,
@@ -232,6 +582,7 @@ def normalize_run_input(
         fact_text=fact_bytes.decode("utf-8-sig"),
         preferences_text=preferences_bytes.decode("utf-8-sig"),
         reference_cards_text=reference_bytes.decode("utf-8-sig"),
+        resume_exemplars=resume_exemplars,
     )
 
 
@@ -258,16 +609,16 @@ def _artifact_sha256(value: BaseModel) -> str:
     return sha256_bytes(payload)
 
 
-def render_resume_markdown(fusion: FusionArtifact) -> str:
-    lines: list[str] = []
-    for section in fusion.sections:
-        lines.extend([f"## {section.name.value}", ""])
-        for entry in section.entries:
-            lines.extend([f"### {entry.heading}", ""])
-            lines.extend(f"- {bullet.text}" for bullet in entry.bullets)
-            if entry.bullets:
-                lines.append("")
-    return "\n".join(lines).rstrip() + "\n"
+def _payload_sha256(value: BaseModel | dict[str, Any]) -> str:
+    payload = value.model_dump(mode="json") if isinstance(value, BaseModel) else value
+    return sha256_bytes(
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    )
 
 
 def render_content_review(
@@ -275,6 +626,7 @@ def render_content_review(
     validation: DeterministicValidationArtifact,
     audit: AuditArtifact,
     suggestions: Sequence[CandidateSuggestion],
+    draft_quality_audit: DraftQualityAuditArtifact | None = None,
     hr_review: HrReviewArtifact | None = None,
 ) -> str:
     lines = [
@@ -290,6 +642,10 @@ def render_content_review(
         f"- HR 扫读：{audit.quality.hr_scan.score}/10",
         f"- 语言自然度：{audit.quality.language_naturalness.score}/10",
     ]
+    if draft_quality_audit is not None:
+        lines.append(
+            f"- 草稿后基础质量门禁：{'通过' if draft_quality_audit.passed else '失败'}"
+        )
     if hr_review is not None:
         lines.extend(
             [
@@ -340,10 +696,14 @@ class CoordinatorRun:
     capability_transfer_map: CapabilityTransferMapArtifact | None = None
     experience_selection: ExperienceSelectionArtifact | None = None
     selection_audit: SelectionAuditArtifact | None = None
+    story_plan: StoryPlanArtifact | None = None
     selection_revisions: list[SelectionRevisionRecord] = field(default_factory=list)
     fact_diff: FactDiffArtifact | None = None
     writer_draft: DraftArtifact | None = None
     asu_draft: DraftArtifact | None = None
+    draft_quality_audit_history: list[DraftQualityAuditArtifact] = field(
+        default_factory=list
+    )
     asu_failure: AgentFailureArtifact | None = None
     execution_mode: ExecutionMode = ExecutionMode.BLIND_DUAL
     fusion_history: list[FusionArtifact] = field(default_factory=list)
@@ -353,6 +713,7 @@ class CoordinatorRun:
     audit_history: list[AuditArtifact] = field(default_factory=list)
     hr_review_history: list[HrReviewArtifact] = field(default_factory=list)
     reference_research: ReferenceResearchArtifact | None = None
+    agent_receipts: list[AgentInvocationReceipt] = field(default_factory=list)
     committed_path: Path | None = None
 
     @classmethod
@@ -388,6 +749,8 @@ class CoordinatorRun:
             raise AgentHandoffError("checkpoint application directory does not match")
         if checkpoint.input_packet.role_family is not normalized.packet.role_family:
             raise AgentHandoffError("checkpoint role family does not match")
+        if checkpoint.input_packet.role_track is not normalized.packet.role_track:
+            raise AgentHandoffError("checkpoint role track does not match")
         restored_input = NormalizedRunInput(
             packet=checkpoint.input_packet,
             application_dir=normalized.application_dir,
@@ -395,6 +758,7 @@ class CoordinatorRun:
             fact_text=normalized.fact_text,
             preferences_text=normalized.preferences_text,
             reference_cards_text=normalized.reference_cards_text,
+            resume_exemplars=normalized.resume_exemplars,
         )
         return cls(
             normalized=restored_input,
@@ -404,6 +768,7 @@ class CoordinatorRun:
             capability_transfer_map=checkpoint.capability_transfer_map,
             experience_selection=checkpoint.experience_selection,
             selection_audit=checkpoint.selection_audit,
+            story_plan=checkpoint.story_plan,
             selection_revisions=list(checkpoint.selection_revisions),
             fact_diff=checkpoint.fact_diff,
             execution_mode=checkpoint.execution_mode,
@@ -427,6 +792,12 @@ class CoordinatorRun:
         return self.validation_history[-1]
 
     @property
+    def current_draft_quality_audit(self) -> DraftQualityAuditArtifact:
+        if not self.draft_quality_audit_history:
+            raise OrchestrationError("draft quality audit has not been recorded")
+        return self.draft_quality_audit_history[-1]
+
+    @property
     def current_audit(self) -> AuditArtifact:
         if not self.audit_history:
             raise OrchestrationError("audit has not been recorded")
@@ -437,6 +808,78 @@ class CoordinatorRun:
         if not self.hr_review_history:
             raise OrchestrationError("HR review has not been recorded")
         return self.hr_review_history[-1]
+
+    def record_agent_receipt(
+        self,
+        receipt: AgentInvocationReceipt,
+        *,
+        prompt_text: str,
+        input_payload: BaseModel | dict[str, Any],
+        output_payload: BaseModel | dict[str, Any],
+    ) -> None:
+        if receipt.prompt_sha256 != sha256_bytes(prompt_text.encode("utf-8")):
+            raise AgentHandoffError("agent receipt prompt hash does not match")
+        if receipt.input_sha256 != _payload_sha256(input_payload):
+            raise AgentHandoffError("agent receipt input hash does not match")
+        if receipt.output_sha256 != _payload_sha256(output_payload):
+            raise AgentHandoffError("agent receipt output hash does not match")
+        if any(
+            item.invocation_id == receipt.invocation_id
+            for item in self.agent_receipts
+        ):
+            raise AgentHandoffError("agent invocation receipt is duplicated")
+        required_roles = {
+            AgentStage.WRITER: AgentRole.WRITER,
+            AgentStage.ASU_WRITER: AgentRole.ASU_WRITER,
+            AgentStage.DRAFT_AUDIT: AgentRole.AUDITOR,
+            AgentStage.POST_FUSION_AUDIT: AgentRole.AUDITOR,
+            AgentStage.HR_REVIEW: AgentRole.HR_REVIEWER,
+        }
+        expected_role = required_roles.get(receipt.stage)
+        if expected_role is not None and receipt.role is not expected_role:
+            raise AgentHandoffError("agent receipt role does not match its stage")
+        self.agent_receipts.append(receipt)
+
+    def _validate_agent_receipts_for_commit(self) -> AgentReceiptBundleArtifact:
+        if self.packet.schema_version != "1.5":
+            raise OrchestrationError("agent receipt bundle is required only by schema 1.5")
+        expected: dict[AgentStage, set[str]] = {
+            AgentStage.STORY_PLAN: {_artifact_sha256(self.story_plan)},
+            AgentStage.WRITER: {_artifact_sha256(self.writer_draft)},
+            AgentStage.DRAFT_AUDIT: {
+                _artifact_sha256(item) for item in self.draft_quality_audit_history
+            },
+            AgentStage.FUSION: {
+                _artifact_sha256(item) for item in self.fusion_history
+            },
+            AgentStage.POST_FUSION_AUDIT: {
+                _artifact_sha256(item) for item in self.audit_history
+            },
+            AgentStage.HR_REVIEW: {
+                _artifact_sha256(item) for item in self.hr_review_history
+            },
+        }
+        if self.execution_mode is ExecutionMode.BLIND_DUAL:
+            expected[AgentStage.ASU_WRITER] = {_artifact_sha256(self.asu_draft)}
+        actual: dict[AgentStage, set[str]] = {}
+        for receipt in self.agent_receipts:
+            actual.setdefault(receipt.stage, set()).add(receipt.output_sha256)
+        missing = {
+            stage.value: sorted(hashes.difference(actual.get(stage, set())))
+            for stage, hashes in expected.items()
+            if hashes.difference(actual.get(stage, set()))
+        }
+        if missing:
+            raise OrchestrationError(
+                f"schema 1.5 agent invocation receipts are incomplete: {missing}"
+            )
+        return AgentReceiptBundleArtifact(
+            schema_version=self.packet.schema_version,
+            run_id=self.packet.run_id,
+            created_at=self.packet.created_at,
+            source_digests=self.packet.source_digests,
+            receipts=self.agent_receipts,
+        )
 
     def _transition(self, target: ContentState) -> None:
         assert_state_transition(self.state, target)
@@ -467,6 +910,7 @@ class CoordinatorRun:
             capability_transfer_map=self.capability_transfer_map,
             experience_selection=self.experience_selection,
             selection_audit=self.selection_audit,
+            story_plan=self.story_plan,
             selection_revisions=self.selection_revisions,
         )
         return save_checkpoint(self.normalized.application_dir, checkpoint)
@@ -509,6 +953,8 @@ class CoordinatorRun:
             _same_envelope(self.packet, artifact)
         if jd_analysis.role_family is not self.packet.role_family:
             raise AgentHandoffError("JD analysis role family does not match the approved packet")
+        if jd_analysis.role_track is not self.packet.role_track:
+            raise AgentHandoffError("JD analysis role track does not match the approved packet")
         if evidence_map.selection_approved:
             raise HumanGateError("selection cannot be pre-approved by the coordinator")
         current_fact_hash = self.packet.source_digests.fact_snapshot_sha256
@@ -523,6 +969,7 @@ class CoordinatorRun:
         self.capability_transfer_map = None
         self.experience_selection = None
         self.selection_audit = None
+        self.story_plan = None
         unresolved = (
             fact_diff.confirmation_status is ConfirmationStatus.PENDING
             and bool(fact_diff.questions or fact_diff.operations)
@@ -624,6 +1071,7 @@ class CoordinatorRun:
             fact_text=fact_bytes.decode("utf-8-sig"),
             preferences_text=self.normalized.preferences_text,
             reference_cards_text=self.normalized.reference_cards_text,
+            resume_exemplars=self.normalized.resume_exemplars,
         )
         self.reference_research = self.reference_research.model_copy(
             update={"source_digests": updated_digests}
@@ -650,7 +1098,7 @@ class CoordinatorRun:
     ) -> None:
         if self.state is not ContentState.AWAITING_SELECTION_APPROVAL:
             raise HumanGateError("capability transfer mapping is not currently expected")
-        if self.packet.schema_version not in {"1.2", "1.3"}:
+        if self.packet.schema_version not in {"1.2", "1.3", "1.4", "1.5"}:
             raise AgentHandoffError("capability transfer mapping requires schema 1.2")
         if not self.jd_analysis or not self.fact_diff:
             raise OrchestrationError("analysis must exist before capability transfer mapping")
@@ -697,6 +1145,7 @@ class CoordinatorRun:
         self.capability_transfer_map = artifact
         self.experience_selection = None
         self.selection_audit = None
+        self.story_plan = None
         self._save_gate_checkpoint()
 
     def record_experience_selection(
@@ -709,7 +1158,7 @@ class CoordinatorRun:
         _same_envelope(self.packet, selection)
         if selection.selection_approved:
             raise HumanGateError("coordinator selection proposal cannot be pre-approved")
-        if self.packet.schema_version in {"1.2", "1.3"}:
+        if self.packet.schema_version in {"1.2", "1.3", "1.4", "1.5"}:
             if not self.capability_transfer_map:
                 raise HumanGateError(
                     "schema 1.2 selection requires a complete capability transfer map"
@@ -740,7 +1189,14 @@ class CoordinatorRun:
                 raise AgentHandoffError(
                     f"selection candidate {candidate.experience_id} cites foreign facts: {sorted(unknown)}"
                 )
-            if self.packet.schema_version in {"1.2", "1.3"}:
+            hidden_confirmed_facts = known_fact_ids.difference(candidate.fact_ids)
+            if hidden_confirmed_facts:
+                raise AgentHandoffError(
+                    "every selection candidate must expose every confirmed fact to "
+                    "the scorer and independent selection auditor; "
+                    f"{candidate.experience_id} hides {sorted(hidden_confirmed_facts)}"
+                )
+            if self.packet.schema_version in {"1.2", "1.3", "1.4", "1.5"}:
                 assert self.capability_transfer_map is not None
                 transfer_by_id = {
                     item.transfer_id: item
@@ -798,6 +1254,7 @@ class CoordinatorRun:
                     )
         self.experience_selection = selection
         self.selection_audit = None
+        self.story_plan = None
         self._save_gate_checkpoint()
 
     def selection_auditor_packet(
@@ -809,7 +1266,7 @@ class CoordinatorRun:
             raise HumanGateError("selection audit is not currently allowed")
         if not self.experience_selection or not self.jd_analysis or not self.evidence_map:
             raise OrchestrationError("selection audit inputs are incomplete")
-        if self.packet.schema_version in {"1.2", "1.3"} and not self.capability_transfer_map:
+        if self.packet.schema_version in {"1.2", "1.3", "1.4", "1.5"} and not self.capability_transfer_map:
             raise OrchestrationError("schema 1.2 selection audit requires capability map")
         candidate_ids = {item.experience_id for item in self.experience_selection.candidates}
         return {
@@ -823,6 +1280,12 @@ class CoordinatorRun:
                 else None
             ),
             "experience_selection": _artifact_payload(self.experience_selection),
+            "story_plan": (
+                _artifact_payload(self.story_plan) if self.story_plan else None
+            ),
+            "approved_resume_exemplars": [
+                item.packet() for item in self.normalized.resume_exemplars
+            ],
             "complete_experience_pool": [
                 {
                     "experience_id": item.experience_id,
@@ -861,7 +1324,61 @@ class CoordinatorRun:
         self.selection_audit = audit
         self._save_gate_checkpoint()
 
-    def approve_selection(self, selection: ExperienceSelectionArtifact) -> None:
+    def story_planner_packet(
+        self,
+        facts: dict[str, FactRecord],
+    ) -> dict[str, Any]:
+        if self.packet.schema_version != "1.5":
+            raise HumanGateError("story planning is available only in schema 1.5")
+        if self.state is not ContentState.AWAITING_SELECTION_APPROVAL:
+            raise HumanGateError("story planning is not currently allowed")
+        if (
+            not self.experience_selection
+            or not self.selection_audit
+            or not self.selection_audit.passed
+        ):
+            raise HumanGateError(
+                "story planning requires a passing pre-draft selection audit"
+            )
+        selected = [
+            item for item in self.experience_selection.candidates if item.selected
+        ]
+        selected_fact_ids = {
+            fact_id for item in selected for fact_id in item.fact_ids
+        }
+        missing = selected_fact_ids.difference(facts)
+        if missing:
+            raise AgentHandoffError(
+                f"story planner packet is missing facts: {sorted(missing)}"
+            )
+        return {
+            "schema_version": self.packet.schema_version,
+            "run_id": self.packet.run_id,
+            "source_digests": self.packet.source_digests.model_dump(mode="json"),
+            "jd_analysis": _artifact_payload(self.jd_analysis),
+            "experience_selection": _artifact_payload(self.experience_selection),
+            "selection_audit": _artifact_payload(self.selection_audit),
+            "experience_selection_sha256": selection_decision_sha256(
+                self.experience_selection
+            ),
+            "selected_fact_values": {
+                fact_id: facts[fact_id].value
+                for fact_id in sorted(selected_fact_ids)
+            },
+            "rules": {
+                "story_elements": ["context", "action", "method", "challenge", "result"],
+                "required_elements": ["context", "action", "result"],
+                "bullet_intents_per_experience": "one or more evidence-driven intents; count is advisory",
+                "ownership_guard_is_internal_only": True,
+                "focus": "maximize positive, role-relevant capability evidence",
+            },
+        }
+
+    def approve_selection(
+        self,
+        selection: ExperienceSelectionArtifact,
+        story_plan: StoryPlanArtifact | None = None,
+    ) -> None:
         if self.state is not ContentState.AWAITING_SELECTION_APPROVAL:
             raise HumanGateError("selection approval is not currently allowed")
         _same_envelope(self.packet, selection)
@@ -879,6 +1396,35 @@ class CoordinatorRun:
         selected = [item for item in selection.candidates if item.selected]
         if not selected:
             raise HumanGateError("at least one experience must be selected")
+        if self.packet.schema_version == "1.5":
+            if story_plan is None:
+                raise HumanGateError(
+                    "schema 1.5 selection approval requires a story plan"
+                )
+            _same_envelope(self.packet, story_plan)
+            if story_plan.experience_selection_sha256 != selection_decision_sha256(
+                selection
+            ):
+                raise AgentHandoffError(
+                    "story plan is not bound to the approved selection decision"
+                )
+            story_ids = {item.experience_id for item in story_plan.experiences}
+            selected_ids = {item.experience_id for item in selected}
+            if story_ids != selected_ids:
+                raise AgentHandoffError(
+                    "story plan must cover every selected experience exactly once"
+                )
+            for story in story_plan.experiences:
+                candidate = next(
+                    item for item in selected if item.experience_id == story.experience_id
+                )
+                if not story.evidence.all_fact_ids().issubset(candidate.fact_ids):
+                    raise AgentHandoffError(
+                        f"story plan cites facts outside {story.experience_id}"
+                    )
+            self.story_plan = story_plan
+        elif story_plan is not None:
+            raise HumanGateError("story plans are available only in schema 1.5")
         approved_requirements = sorted(
             {requirement_id for item in selected for requirement_id in item.matched_requirement_ids}
         )
@@ -907,6 +1453,7 @@ class CoordinatorRun:
             fact_text=self.normalized.fact_text,
             preferences_text=self.normalized.preferences_text,
             reference_cards_text=self.normalized.reference_cards_text,
+            resume_exemplars=self.normalized.resume_exemplars,
         )
         self._transition(ContentState.DRAFTING)
         self._save_gate_checkpoint()
@@ -920,8 +1467,19 @@ class CoordinatorRun:
             raise HumanGateError("writer packets require approved selection")
         if not self.jd_analysis or not self.evidence_map or not self.experience_selection:
             raise OrchestrationError("analysis artifacts are missing")
-        if self.packet.schema_version in {"1.2", "1.3"} and not self.capability_transfer_map:
+        guidance = role_content_guidance(
+            self.packet.role_family,
+            self.packet.role_track,
+        )
+        if guidance.get("strategy_status") == "role_strategy_pending":
+            raise RoleStrategyPendingError(
+                self.packet.role_family,
+                self.packet.role_track,
+            )
+        if self.packet.schema_version in {"1.2", "1.3", "1.4", "1.5"} and not self.capability_transfer_map:
             raise OrchestrationError("schema 1.2 writer packet requires capability map")
+        if self.packet.schema_version == "1.5" and not self.story_plan:
+            raise OrchestrationError("schema 1.5 writer packet requires story plan")
         selected_fact_ids = set(self.packet.approved_fact_ids)
         baseline_experience_ids = {
             item.experience_id
@@ -979,7 +1537,7 @@ class CoordinatorRun:
                     "heading": item.heading,
                     "immutable_tokens": list(item.immutable_tokens),
                     "tier": selection_by_id[item.experience_id].tier.value,
-                    "bullet_budget": selection_by_id[item.experience_id].proposed_bullet_count,
+                    "suggested_bullet_count": selection_by_id[item.experience_id].proposed_bullet_count,
                 }
                 for item in experiences.values()
                 if item.experience_id in selected_experience_ids
@@ -996,35 +1554,203 @@ class CoordinatorRun:
             ],
             "confirmed_facts": selected_facts,
             "experience_selection": _artifact_payload(self.experience_selection),
+            "story_plan": (
+                _artifact_payload(self.story_plan) if self.story_plan else None
+            ),
             "approved_capability_transfers": approved_transfers,
             "fixed_education_baseline": fixed_education_baseline,
-            "fixed_ability_headings": [
-                "专业硬技能",
-                "综合软技能",
-                "游戏体验",
-                "语言能力",
+            "fixed_ability_headings": list(
+                self_ability_headings_for_role(
+                    self.packet.role_family, self.packet.schema_version
+                )
+            ),
+            "role_content_guidance": guidance,
+            "approved_resume_exemplars": [
+                item.packet() for item in self.normalized.resume_exemplars
             ],
             "preferences": self.normalized.preferences_text,
             "content_budget": {
-                "max_chinese_characters": 1500,
-                "max_experience_bullets": 14,
-                "reference_target_chinese_characters": 1200,
-                "reference_target_experience_bullets": 10,
-                "minimum_is_not_required": True,
+                "minimum_total_chinese_characters": 1200,
+                "minimum_core_experience_chinese_characters": 180,
+                "minimum_auxiliary_experience_chinese_characters": 120,
+                "bullet_count_is_advisory": True,
+                "experience_count_minimum": 1,
+                "experience_count_maximum": 4,
             },
         }
 
     def record_drafts(self, writer: DraftArtifact, asu: DraftArtifact) -> None:
         if self.state is not ContentState.DRAFTING:
             raise OrchestrationError("drafts are not currently expected")
+        if self.draft_quality_audit_history:
+            if self.current_draft_quality_audit.passed:
+                raise OrchestrationError("passing draft quality audit already froze the drafts")
+            if len(self.draft_quality_audit_history) >= MAX_GENERATION_ROUNDS:
+                raise OrchestrationError("at most two draft-quality revision rounds are allowed")
         for artifact in (writer, asu):
             _same_envelope(self.packet, artifact)
+            if (
+                artifact.role_family is not self.packet.role_family
+                or artifact.role_track is not self.packet.role_track
+            ):
+                raise AgentHandoffError("draft role route does not match the approved packet")
         if writer.agent is not DraftAgent.WRITER:
             raise AgentHandoffError("writer lane returned the wrong agent type")
         if asu.agent is not DraftAgent.ASU_WRITER:
             raise AgentHandoffError("ASu lane returned the wrong agent type")
+        if self.packet.schema_version == "1.5":
+            if not self.story_plan:
+                raise OrchestrationError("schema 1.5 drafts require story plan")
+            planned = {
+                item.experience_id: {
+                    intent.intent_id for intent in item.bullet_intents
+                }
+                for item in self.story_plan.experiences
+            }
+            for draft in (writer, asu):
+                actual = {
+                    entry.experience_id: {
+                        bullet.intent_id for bullet in entry.bullets
+                    }
+                    for section in draft.sections
+                    if section.name in {
+                        ResumeSectionName.WORK,
+                        ResumeSectionName.PRACTICE,
+                    }
+                    for entry in section.entries
+                }
+                if actual != planned:
+                    raise AgentHandoffError(
+                        "schema 1.5 draft must cover every story intent exactly once"
+                    )
         self.writer_draft = writer
         self.asu_draft = asu
+
+    def draft_quality_auditor_packet(
+        self, fact_values: dict[str, str]
+    ) -> dict[str, Any]:
+        if self.state is not ContentState.DRAFTING:
+            raise HumanGateError("draft quality Auditor can run only after drafting")
+        if not self.writer_draft or not self.jd_analysis or not self.experience_selection:
+            raise OrchestrationError("draft quality audit inputs are incomplete")
+        if self.execution_mode is ExecutionMode.BLIND_DUAL and not self.asu_draft:
+            raise AgentHandoffError("blind-dual draft quality audit requires both drafts")
+        current_hashes = {
+            DraftAgent.WRITER: _artifact_sha256(self.writer_draft),
+        }
+        if self.asu_draft:
+            current_hashes[DraftAgent.ASU_WRITER] = _artifact_sha256(self.asu_draft)
+        if self.draft_quality_audit_history:
+            audited_hashes = {
+                item.agent: item.draft_sha256
+                for item in self.current_draft_quality_audit.lane_reviews
+            }
+            if audited_hashes == current_hashes:
+                raise OrchestrationError("current drafts were already quality-audited")
+        selected_fact_ids = {
+            fact_id
+            for candidate in self.experience_selection.candidates
+            if candidate.selected
+            for fact_id in candidate.fact_ids
+        }
+        missing = selected_fact_ids.difference(fact_values)
+        if missing:
+            raise AgentHandoffError(
+                f"draft quality Auditor packet is missing facts: {sorted(missing)}"
+            )
+        return {
+            "phase": "post_draft",
+            "schema_version": self.packet.schema_version,
+            "run_id": self.packet.run_id,
+            "created_at": self.packet.created_at.isoformat(),
+            "source_digests": self.packet.source_digests.model_dump(mode="json"),
+            "execution_mode": self.execution_mode.value,
+            "revision_round": len(self.draft_quality_audit_history),
+            "drafts": [
+                {
+                    "agent": agent.value,
+                    "draft_sha256": current_hashes[agent],
+                    "draft": _artifact_payload(draft),
+                }
+                for agent, draft in (
+                    (DraftAgent.WRITER, self.writer_draft),
+                    (DraftAgent.ASU_WRITER, self.asu_draft),
+                )
+                if draft is not None
+            ],
+            "jd_analysis": _artifact_payload(self.jd_analysis),
+            "experience_selection": _artifact_payload(self.experience_selection),
+            "story_plan": (
+                _artifact_payload(self.story_plan) if self.story_plan else None
+            ),
+            "selected_fact_values": {
+                fact_id: fact_values[fact_id] for fact_id in sorted(selected_fact_ids)
+            },
+            "role_content_guidance": role_content_guidance(
+                self.packet.role_family, self.packet.role_track
+            ),
+            "approved_resume_exemplars": [
+                item.packet() for item in self.normalized.resume_exemplars
+            ],
+            "quality_gate": {
+                "minimum_dimension_score": 8,
+                "minimum_experience_score": 8,
+                "one_line_summary_is_not_complete": True,
+                "minimum_total_chinese_characters": 1200,
+                "minimum_core_experience_chinese_characters": 180,
+                "minimum_auxiliary_experience_chinese_characters": 120,
+                "bullet_count_is_not_a_gate": True,
+                "story_context_action_result_required": True,
+                "negative_boundary_language_forbidden": True,
+                "supported_result_omission_blocks": True,
+                "invented_result_forbidden": True,
+            },
+        }
+
+    def record_draft_quality_audit(
+        self, audit: DraftQualityAuditArtifact
+    ) -> bool:
+        if self.state is not ContentState.DRAFTING:
+            raise OrchestrationError("draft quality audit is not currently expected")
+        if not self.writer_draft or not self.experience_selection:
+            raise OrchestrationError("draft quality audit requires recorded drafts")
+        _same_envelope(self.packet, audit)
+        if audit.execution_mode is not self.execution_mode:
+            raise AgentHandoffError("draft quality audit execution mode does not match")
+        if audit.revision_round != len(self.draft_quality_audit_history):
+            raise AgentHandoffError("draft quality audit revision round is stale")
+        drafts = {DraftAgent.WRITER: self.writer_draft}
+        if self.asu_draft:
+            drafts[DraftAgent.ASU_WRITER] = self.asu_draft
+        expected_experience_ids = set(self.packet.approved_experience_ids)
+        for lane in audit.lane_reviews:
+            draft = drafts.get(lane.agent)
+            if draft is None or lane.draft_sha256 != _artifact_sha256(draft):
+                raise AgentHandoffError("draft quality audit hash does not match current draft")
+            actual_reviews = {item.experience_id: item for item in lane.experience_reviews}
+            if set(actual_reviews) != expected_experience_ids:
+                raise AgentHandoffError(
+                    "draft quality audit must review every selected experience exactly once"
+                )
+            actual_counts = {
+                entry.experience_id: len(entry.bullets)
+                for section in draft.sections
+                if section.name in {ResumeSectionName.WORK, ResumeSectionName.PRACTICE}
+                for entry in section.entries
+            }
+            if set(actual_counts) != expected_experience_ids:
+                raise AgentHandoffError(
+                    "draft does not contain every selected experience exactly once"
+                )
+            if any(
+                actual_reviews[experience_id].bullet_count != bullet_count
+                for experience_id, bullet_count in actual_counts.items()
+            ):
+                raise AgentHandoffError("draft quality audit bullet counts do not match")
+        self.draft_quality_audit_history.append(audit)
+        if not audit.passed and len(self.draft_quality_audit_history) >= MAX_GENERATION_ROUNDS:
+            self._transition(ContentState.QUALITY_FAILED)
+        return audit.passed
 
     def handle_subagent_unavailable(self, choice: str | None = None) -> str:
         if self.state is not ContentState.DRAFTING:
@@ -1046,9 +1772,41 @@ class CoordinatorRun:
             raise HumanGateError("single draft requires explicit degraded-mode approval")
         if self.state is not ContentState.DRAFTING:
             raise OrchestrationError("draft is not currently expected")
+        if self.draft_quality_audit_history:
+            if self.current_draft_quality_audit.passed:
+                raise OrchestrationError("passing draft quality audit already froze the draft")
+            if len(self.draft_quality_audit_history) >= MAX_GENERATION_ROUNDS:
+                raise OrchestrationError("at most two draft-quality revision rounds are allowed")
         _same_envelope(self.packet, writer)
         if writer.agent is not DraftAgent.WRITER:
             raise AgentHandoffError("degraded lane must return a writer draft")
+        if (
+            writer.role_family is not self.packet.role_family
+            or writer.role_track is not self.packet.role_track
+        ):
+            raise AgentHandoffError("draft role route does not match the approved packet")
+        if self.packet.schema_version == "1.5":
+            if not self.story_plan:
+                raise OrchestrationError("schema 1.5 draft requires story plan")
+            planned = {
+                item.experience_id: {
+                    intent.intent_id for intent in item.bullet_intents
+                }
+                for item in self.story_plan.experiences
+            }
+            actual = {
+                entry.experience_id: {bullet.intent_id for bullet in entry.bullets}
+                for section in writer.sections
+                if section.name in {
+                    ResumeSectionName.WORK,
+                    ResumeSectionName.PRACTICE,
+                }
+                for entry in section.entries
+            }
+            if actual != planned:
+                raise AgentHandoffError(
+                    "schema 1.5 draft must cover every story intent exactly once"
+                )
         self.writer_draft = writer
         self.asu_draft = None
         self.asu_failure = AgentFailureArtifact(
@@ -1071,7 +1829,11 @@ class CoordinatorRun:
         self, issue_codes: list[str], requested_at: datetime
     ) -> bool:
         if len(self.selection_revisions) >= 2:
-            self._transition(ContentState.NEEDS_CONTENT_REVIEW)
+            self._transition(
+                ContentState.QUALITY_FAILED
+                if self.packet.schema_version == "1.5"
+                else ContentState.NEEDS_CONTENT_REVIEW
+            )
             return False
         if not self.experience_selection:
             raise OrchestrationError("reselection requires an existing selection")
@@ -1107,8 +1869,10 @@ class CoordinatorRun:
             ).model_dump()
         )
         self.selection_audit = None
+        self.story_plan = None
         self.writer_draft = None
         self.asu_draft = None
+        self.draft_quality_audit_history = []
         self.asu_failure = None
         self.execution_mode = ExecutionMode.BLIND_DUAL
         reset_packet = self.packet.model_copy(
@@ -1126,6 +1890,7 @@ class CoordinatorRun:
             fact_text=self.normalized.fact_text,
             preferences_text=self.normalized.preferences_text,
             reference_cards_text=self.normalized.reference_cards_text,
+            resume_exemplars=self.normalized.resume_exemplars,
         )
         self._transition(ContentState.AWAITING_SELECTION_APPROVAL)
         self._save_gate_checkpoint()
@@ -1146,7 +1911,18 @@ class CoordinatorRun:
             and not self.asu_draft
         ):
             raise AgentHandoffError("both independent drafts are required before fusion")
-        if len(self.fusion_history) >= 3:
+        if not self.draft_quality_audit_history or not self.current_draft_quality_audit.passed:
+            raise AgentHandoffError("fusion requires a passing post-draft quality audit")
+        audited_hashes = {
+            item.agent: item.draft_sha256
+            for item in self.current_draft_quality_audit.lane_reviews
+        }
+        current_hashes = {DraftAgent.WRITER: _artifact_sha256(self.writer_draft)}
+        if self.asu_draft:
+            current_hashes[DraftAgent.ASU_WRITER] = _artifact_sha256(self.asu_draft)
+        if audited_hashes != current_hashes:
+            raise AgentHandoffError("passing draft quality audit is stale")
+        if len(self.fusion_history) >= MAX_GENERATION_ROUNDS:
             raise OrchestrationError("at most two directed revision rounds are allowed")
         if self.fusion_history and len(self.audit_history) != len(self.fusion_history):
             raise OrchestrationError("a new fusion requires an audit of the prior fusion")
@@ -1159,6 +1935,7 @@ class CoordinatorRun:
             facts,
             suggestions,
             self.experience_selection,
+            self.story_plan,
         )
         if not report.passed:
             raise DeterministicGateError(report)
@@ -1201,12 +1978,19 @@ class CoordinatorRun:
             "jd_analysis": _artifact_payload(self.jd_analysis),
             "evidence_map": _artifact_payload(self.evidence_map),
             "experience_selection": _artifact_payload(self.experience_selection),
+            "story_plan": (
+                _artifact_payload(self.story_plan) if self.story_plan else None
+            ),
+            "approved_resume_exemplars": [
+                item.packet() for item in self.normalized.resume_exemplars
+            ],
             "capability_transfer_map": (
                 _artifact_payload(self.capability_transfer_map)
                 if self.capability_transfer_map
                 else None
             ),
             "validation": _artifact_payload(self.current_validation),
+            "quality_gate": _artifact_payload(self.current_validation),
             "referenced_fact_values": {
                 fact_id: fact_values[fact_id] for fact_id in sorted(cited_fact_ids)
             },
@@ -1237,13 +2021,17 @@ class CoordinatorRun:
                 list(audit.selection_issue_codes), audit.created_at
             )
         if audit.disposition is AuditDisposition.PASSED:
-            if self.packet.schema_version == "1.3":
+            if self.packet.schema_version in {"1.3", "1.4", "1.5"}:
                 self._transition(ContentState.HR_REVIEWING)
                 return False
             self._transition(ContentState.NEEDS_CONTENT_REVIEW)
             return True
         if revision_count >= 2:
-            self._transition(ContentState.NEEDS_CONTENT_REVIEW)
+            self._transition(
+                ContentState.QUALITY_FAILED
+                if self.packet.schema_version == "1.5"
+                else ContentState.NEEDS_CONTENT_REVIEW
+            )
         return False
 
     def _hr_expected_review_ids(self) -> set[str]:
@@ -1284,8 +2072,48 @@ class CoordinatorRun:
         fact_ids_by_experience[next(iter(ability_ids))] = skill_fact_ids
         return fact_ids_by_experience
 
+    def _content_fullness_gate(self) -> dict[str, Any]:
+        if not self.experience_selection:
+            raise OrchestrationError("content fullness requires experience selection")
+        selected = {
+            item.experience_id: item
+            for item in self.experience_selection.candidates
+            if item.selected
+        }
+        character_counts = {experience_id: 0 for experience_id in selected}
+        for section in self.current_fusion.sections:
+            for entry in section.entries:
+                if entry.experience_id not in character_counts:
+                    continue
+                character_counts[entry.experience_id] += sum(
+                    len(re.findall(r"[\u4e00-\u9fff]", bullet.text))
+                    for bullet in entry.bullets
+                )
+        per_experience = []
+        for experience_id, candidate in selected.items():
+            minimum = 180 if candidate.tier is ExperienceTier.CORE else 120
+            actual = character_counts[experience_id]
+            per_experience.append(
+                {
+                    "experience_id": experience_id,
+                    "tier": candidate.tier.value,
+                    "chinese_character_count": actual,
+                    "minimum_chinese_characters": minimum,
+                    "passed": actual >= minimum,
+                }
+            )
+        total_actual = self.current_validation.metrics.chinese_character_count
+        return {
+            "total_chinese_character_count": total_actual,
+            "minimum_total_chinese_characters": 1200,
+            "per_experience": per_experience,
+            "bullet_count_is_not_a_gate": True,
+            "passed": total_actual >= 1200
+            and all(item["passed"] for item in per_experience),
+        }
+
     def hr_reviewer_packet(self, fact_values: dict[str, str]) -> dict[str, Any]:
-        if self.packet.schema_version != "1.3":
+        if self.packet.schema_version not in {"1.3", "1.4", "1.5"}:
             raise HumanGateError("independent HR review is available from schema 1.3")
         if self.state is not ContentState.HR_REVIEWING:
             raise HumanGateError("HR Reviewer cannot run before the Auditor passes")
@@ -1297,6 +2125,12 @@ class CoordinatorRun:
         if not self.experience_selection or not self.jd_analysis:
             raise OrchestrationError("HR review inputs are incomplete")
         fact_ids_by_experience = self._hr_fact_ids_by_experience(fact_values)
+        fusion_bullet_ids = {
+            bullet.bullet_id
+            for section in self.current_fusion.sections
+            for entry in section.entries
+            for bullet in entry.bullets
+        }
         selected_fact_ids = set().union(*fact_ids_by_experience.values())
         missing = selected_fact_ids.difference(fact_values)
         if missing:
@@ -1310,6 +2144,10 @@ class CoordinatorRun:
             for bullet in entry.bullets
             for fact_id in bullet.fact_ids
         }
+        uncited_fact_ids_by_experience = {
+            experience_id: sorted(fact_ids.difference(cited_fact_ids))
+            for experience_id, fact_ids in sorted(fact_ids_by_experience.items())
+        }
         return {
             "schema_version": self.packet.schema_version,
             "run_id": self.packet.run_id,
@@ -1320,6 +2158,13 @@ class CoordinatorRun:
             "fusion": _artifact_payload(self.current_fusion),
             "base_audit": _artifact_payload(self.current_audit),
             "experience_selection": _artifact_payload(self.experience_selection),
+            "story_plan": (
+                _artifact_payload(self.story_plan) if self.story_plan else None
+            ),
+            "quality_gate": _artifact_payload(self.current_validation),
+            "approved_resume_exemplars": [
+                item.packet() for item in self.normalized.resume_exemplars
+            ],
             "selected_fact_values": {
                 fact_id: fact_values[fact_id] for fact_id in sorted(selected_fact_ids)
             },
@@ -1328,16 +2173,38 @@ class CoordinatorRun:
                 for experience_id, fact_ids in sorted(fact_ids_by_experience.items())
             },
             "cited_fact_ids": sorted(cited_fact_ids),
+            "uncited_selected_fact_ids_by_experience": uncited_fact_ids_by_experience,
+            "content_fullness_gate": self._content_fullness_gate(),
+            "completion_diagnostics": {
+                "chinese_character_count": self.current_validation.metrics.chinese_character_count,
+                "experience_bullet_count": self.current_validation.metrics.experience_bullet_count,
+                "reference_target_chinese_characters": 1200,
+                "reference_target_experience_bullets": 10,
+                "below_both_reference_targets": (
+                    self.current_validation.metrics.chinese_character_count < 1200
+                    and self.current_validation.metrics.experience_bullet_count < 10
+                ),
+                "targets_are_diagnostics_not_quotas": self.packet.schema_version != "1.5",
+                "legacy_compatibility_only": self.packet.schema_version != "1.5",
+            },
             "high_standard_gate": {
                 "recommendation": "strong_push",
-                "overall_minimum": 8.5,
-                "dimension_minimum": 8.5,
+                "overall_minimum": (
+                    9.0 if self.packet.schema_version == "1.5" else 8.5
+                ),
+                "dimension_minimum": (
+                    8.0 if self.packet.schema_version == "1.5" else 8.5
+                ),
+                "evidence_bullet_ids_required": self.packet.schema_version == "1.5",
+                "content_fullness_gate_required": self.packet.schema_version == "1.5",
+                "bullet_count_is_not_a_gate": self.packet.schema_version == "1.5",
                 "dimensions": [
                     "role_fit",
                     "narrative_completeness",
                     "evidence_specificity",
                     "decision_readiness",
                     "credibility",
+                    "content_fullness",
                 ],
             },
         }
@@ -1345,7 +2212,7 @@ class CoordinatorRun:
     def record_hr_review(
         self, review: HrReviewArtifact, fact_values: dict[str, str]
     ) -> bool:
-        if self.packet.schema_version != "1.3":
+        if self.packet.schema_version not in {"1.3", "1.4", "1.5"}:
             raise HumanGateError("independent HR review is available from schema 1.3")
         if self.state is not ContentState.HR_REVIEWING:
             raise OrchestrationError("HR review is not currently expected")
@@ -1361,6 +2228,40 @@ class CoordinatorRun:
             raise AgentHandoffError(
                 "HR review must cover every approved experience and self-ability exactly once"
             )
+        if self.packet.schema_version == "1.5":
+            fusion_bullet_ids = {
+                bullet.bullet_id
+                for section in self.current_fusion.sections
+                for entry in section.entries
+                for bullet in entry.bullets
+            }
+            cited_review_bullets = {
+                bullet_id
+                for dimension in (
+                    review.role_fit,
+                    review.narrative_completeness,
+                    review.evidence_specificity,
+                    review.decision_readiness,
+                    review.credibility,
+                    review.content_fullness,
+                )
+                if dimension is not None
+                for bullet_id in dimension.evidence_bullet_ids
+            } | {
+                bullet_id
+                for item in review.experience_reviews
+                for bullet_id in item.evidence_bullet_ids
+            }
+            unknown_bullets = cited_review_bullets.difference(fusion_bullet_ids)
+            if unknown_bullets:
+                raise AgentHandoffError(
+                    "HR review cites unknown fusion bullets: "
+                    f"{sorted(unknown_bullets)}"
+                )
+            if review.passed and not self._content_fullness_gate()["passed"]:
+                raise AgentHandoffError(
+                    "schema 1.5 HR pass requires the content-fullness character gate"
+                )
         known_requirements = {
             item.requirement_id for item in self.jd_analysis.requirements
         }
@@ -1389,11 +2290,53 @@ class CoordinatorRun:
             for bullet in entry.bullets
             for fact_id in bullet.fact_ids
         }
+        if self.packet.schema_version in {"1.4", "1.5"}:
+            for item in review.experience_reviews:
+                expected_uncited = fact_ids_by_experience[
+                    item.experience_id
+                ].difference(cited_fact_ids)
+                assessed_uncited = {
+                    assessment.fact_id
+                    for assessment in item.uncited_fact_assessments
+                }
+                if assessed_uncited != expected_uncited:
+                    raise AgentHandoffError(
+                        "schema 1.4+ HR review must assess every uncited selected fact "
+                        "exactly once; "
+                        f"{item.experience_id} expected={sorted(expected_uncited)}, "
+                        f"actual={sorted(assessed_uncited)}"
+                    )
+                should_include = {
+                    assessment.fact_id
+                    for assessment in item.uncited_fact_assessments
+                    if assessment.disposition
+                    is UncitedFactDisposition.SHOULD_INCLUDE
+                }
+                if should_include != set(item.omitted_fact_ids):
+                    raise AgentHandoffError(
+                        "HR should_include assessments must match omitted_fact_ids"
+                    )
         omitted = {
             fact_id
             for item in review.experience_reviews
             for fact_id in item.omitted_fact_ids
         }
+        selected_fact_ids = {
+            fact_id
+            for candidate in self.experience_selection.candidates
+            if candidate.selected
+            for fact_id in candidate.fact_ids
+        }
+        invalid_omitted = {
+            fact_id
+            for fact_id in omitted
+            if fact_id not in selected_fact_ids
+            and not fact_id.startswith("FACT-SKILL-")
+        }
+        if invalid_omitted:
+            raise AgentHandoffError(
+                f"HR omitted facts are outside approved experiences: {sorted(invalid_omitted)}"
+            )
         if omitted.intersection(cited_fact_ids):
             raise AgentHandoffError("HR omitted facts are already cited in the fusion")
         self.hr_review_history.append(review)
@@ -1405,7 +2348,18 @@ class CoordinatorRun:
         if review.disposition is HrReviewDisposition.REVISE:
             self._transition(ContentState.AUDITING)
             return False
-        self._transition(ContentState.NEEDS_CONTENT_REVIEW)
+        if review.disposition is HrReviewDisposition.NEEDS_INPUT:
+            self._transition(
+                ContentState.NEEDS_INPUT
+                if self.packet.schema_version == "1.5"
+                else ContentState.NEEDS_CONTENT_REVIEW
+            )
+            return False
+        self._transition(
+            ContentState.QUALITY_FAILED
+            if self.packet.schema_version == "1.5"
+            else ContentState.NEEDS_CONTENT_REVIEW
+        )
         return False
 
     def commit_for_review(self) -> Path:
@@ -1423,19 +2377,23 @@ class CoordinatorRun:
             ]
         ):
             raise OrchestrationError("required run artifacts are incomplete")
+        if self.packet.schema_version == "1.5" and not self.story_plan:
+            raise OrchestrationError("schema 1.5 run is missing story plan")
         if self.execution_mode is ExecutionMode.BLIND_DUAL and not self.asu_draft:
             raise OrchestrationError("blind-dual run is missing ASu draft")
         if self.execution_mode is ExecutionMode.SINGLE_AGENT_DEGRADED and not self.asu_failure:
             raise OrchestrationError("degraded run is missing the unavailable-agent record")
+        if not self.draft_quality_audit_history or not self.current_draft_quality_audit.passed:
+            raise OrchestrationError("review commit requires a passing draft quality audit")
         if (
-            self.packet.schema_version == "1.3"
+            self.packet.schema_version in {"1.3", "1.4", "1.5"}
             and self.current_audit.disposition is AuditDisposition.PASSED
             and (
                 not self.hr_review_history
                 or self.current_hr_review.revision_round != len(self.fusion_history) - 1
             )
         ):
-            raise OrchestrationError("schema 1.3 passing audit requires HR review")
+            raise OrchestrationError("schema 1.3+ passing audit requires HR review")
         if self.stage is None:
             self.stage = begin_run(
                 self.normalized.application_dir, self.packet.run_id
@@ -1443,7 +2401,7 @@ class CoordinatorRun:
         self.stage.write_model("input-packet.json", self.packet)
         self.stage.write_model("jd-analysis.json", self.jd_analysis)
         self.stage.write_model("evidence-map.json", self.evidence_map)
-        if self.packet.schema_version in {"1.2", "1.3"}:
+        if self.packet.schema_version in {"1.2", "1.3", "1.4", "1.5"}:
             if not self.capability_transfer_map:
                 raise OrchestrationError("schema 1.2 run is missing capability transfer map")
             self.stage.write_model(
@@ -1451,14 +2409,26 @@ class CoordinatorRun:
             )
         self.stage.write_model("experience-selection.json", self.experience_selection)
         self.stage.write_model("selection-audit-pre.json", self.selection_audit)
+        if self.packet.schema_version == "1.5":
+            self.stage.write_model("story-plan.json", self.story_plan)
         self.stage.write_model("fact-diff.json", self.fact_diff)
         self.stage.write_model("reference-research.json", self.reference_research)
         self.stage.write_model("draft-writer.json", self.writer_draft)
         self.stage.write_model(
             "draft-asu.json", self.asu_draft or self.asu_failure
         )
+        self.stage.write_model(
+            "draft-quality-audit.json", self.current_draft_quality_audit
+        )
+        for review in self.draft_quality_audit_history[:-1]:
+            self.stage.write_model(
+                f"draft-quality-reviews/round-{review.revision_round:02d}.json",
+                review,
+            )
         self.stage.write_model("fusion.json", self.current_fusion)
         self.stage.write_model("validation.json", self.current_validation)
+        if self.packet.schema_version == "1.5":
+            self.stage.write_model("quality-gate.json", self.current_validation)
         self.stage.write_model("audit.json", self.current_audit)
         current_hr_review = None
         if (
@@ -1472,6 +2442,10 @@ class CoordinatorRun:
                 continue
             self.stage.write_model(
                 f"hr-reviews/round-{review.revision_round:02d}.json", review
+            )
+        if self.packet.schema_version == "1.5":
+            self.stage.write_model(
+                "agent-receipts.json", self._validate_agent_receipts_for_commit()
             )
         for index in range(0, len(self.fusion_history) - 1):
             self.stage.write_model(
@@ -1495,6 +2469,7 @@ class CoordinatorRun:
                 self.current_validation,
                 self.current_audit,
                 suggestions,
+                self.current_draft_quality_audit,
                 current_hr_review,
             ),
         )
@@ -1510,6 +2485,11 @@ class CoordinatorRun:
             revision_count=len(self.fusion_history) - 1,
             selection_revision_count=len(self.selection_revisions),
             selection_revisions=self.selection_revisions,
+            producer=(
+                "official_coordinator"
+                if self.packet.schema_version == "1.5"
+                else None
+            ),
         )
         self.committed_path = self.stage.commit(manifest)
         remove_checkpoint(self.normalized.application_dir, self.packet.run_id)
@@ -1526,6 +2506,7 @@ class CoordinatorRun:
         approval_granted: bool,
         referenced_fact_values: dict[str, str],
         approved_at: datetime | None = None,
+        user_approval: UserApprovalRecord | None = None,
     ) -> Path:
         if not approval_granted:
             raise HumanGateError("explicit content approval is required")
@@ -1533,11 +2514,30 @@ class CoordinatorRun:
             raise HumanGateError("content is not ready for approval")
         if self.current_audit.disposition is not AuditDisposition.PASSED:
             raise HumanGateError("failed hard/truth audit cannot be approved")
-        if self.packet.schema_version == "1.3" and (
+        if self.packet.schema_version in {"1.3", "1.4", "1.5"} and (
             not self.hr_review_history or not self.current_hr_review.passed
         ):
             raise HumanGateError("failed HR decision gate cannot be approved")
         final_path = self.commit_for_review()
+        if self.packet.schema_version == "1.5":
+            if user_approval is None:
+                raise HumanGateError(
+                    "schema 1.5 approval requires an explicit user approval record"
+                )
+            if user_approval.run_id != self.packet.run_id:
+                raise HumanGateError("user approval record targets another run")
+            content_sha256 = sha256_bytes(
+                (final_path / "content-master.md").read_bytes()
+            )
+            if user_approval.content_sha256 != content_sha256:
+                raise HumanGateError(
+                    "user approval record does not match final content hash"
+                )
+            if approved_at is not None and approved_at != user_approval.approved_at:
+                raise HumanGateError(
+                    "approval timestamp conflicts with user approval record"
+                )
+            approved_at = user_approval.approved_at
         cited = {
             fact_id
             for section in self.current_fusion.sections
@@ -1556,6 +2556,7 @@ class CoordinatorRun:
             self.packet.run_id,
             {fact_id: referenced_fact_values[fact_id] for fact_id in cited},
             approved_at=approved_at,
+            user_approval=user_approval,
         )
         return final_path
 
@@ -1565,9 +2566,11 @@ class CoordinatorRun:
         approval_granted: bool,
         referenced_fact_values: dict[str, str],
         approved_at: datetime | None = None,
+        user_approval: UserApprovalRecord | None = None,
     ) -> Path:
         return self.approve_content(
             approval_granted=approval_granted,
             referenced_fact_values=referenced_fact_values,
             approved_at=approved_at,
+            user_approval=user_approval,
         )

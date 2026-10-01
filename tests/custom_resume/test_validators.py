@@ -27,6 +27,8 @@ from models import (  # noqa: E402
     ResumeEntry,
     ResumeSection,
     ResumeSectionName,
+    RoleFamily,
+    RoleTrack,
     Severity,
     SourceDigests,
 )
@@ -186,7 +188,9 @@ def test_real_fact_library_parses_all_migrated_ids() -> None:
         return
     experiences, facts = parse_fact_records(source.read_text(encoding="utf-8"))
     assert len(experiences) == 26
-    assert len(facts) == 75
+    # The private fact library may grow independently of code changes. Guard the
+    # migrated baseline without making every confirmed addition break CI.
+    assert len(facts) >= 108
 
 
 def test_v12_education_is_exact_and_ability_categories_are_fixed() -> None:
@@ -222,14 +226,24 @@ def test_v12_education_is_exact_and_ability_categories_are_fixed() -> None:
         ),
     }
 
-    def build(education_text: str) -> FusionArtifact:
+    def build(
+        education_text: str,
+        *,
+        schema_version: str = "1.2",
+        ability_headings: tuple[str, str, str, str] = (
+            "专业硬技能",
+            "综合软技能",
+            "游戏经历",
+            "语言能力",
+        ),
+    ) -> FusionArtifact:
         specifications = [
             ("EXP-EDU-001", "测试大学｜汉语言文学｜2022/09–2026/06", education.fact_id, education_text, []),
             (EXP_ID, "测试公司｜产品负责人｜2025/04–2025/06", FACT_ID, fact_record().value, ["REQ-001"]),
             *[
                 ("EXP-SKILL-001", heading, fact.fact_id, fact.value, [])
                 for heading, fact in zip(
-                    ("专业硬技能", "综合软技能", "游戏体验", "语言能力"),
+                    ability_headings,
                     skill_facts,
                     strict=True,
                 )
@@ -259,7 +273,7 @@ def test_v12_education_is_exact_and_ability_categories_are_fixed() -> None:
                 )
             )
         return FusionArtifact(
-            schema_version="1.2",
+            schema_version=schema_version,
             run_id=RUN_ID,
             created_at=NOW,
             source_digests=digests(),
@@ -340,6 +354,36 @@ def test_v12_education_is_exact_and_ability_categories_are_fixed() -> None:
         experience_selection=v12_selection,
     )
     assert "EDUCATION_BASELINE_CHANGED" in finding_codes(changed)
+
+    community_jd = JDAnalysisArtifact.model_validate(
+        {
+            **jd_analysis().model_dump(mode="python"),
+            "schema_version": "1.4",
+            "role_family": RoleFamily.COMMUNITY_OPERATIONS,
+            "role_track": RoleTrack.CONTENT,
+        }
+    )
+    v14_selection = v12_selection.model_copy(update={"schema_version": "1.4"})
+    community_valid = validate_fusion_content(
+        build(
+            education.value,
+            schema_version="1.4",
+            ability_headings=("专业硬技能", "综合软技能", "行业/平台经历", "语言能力"),
+        ),
+        community_jd,
+        experiences,
+        all_facts,
+        experience_selection=v14_selection,
+    )
+    assert community_valid.passed is True
+    community_wrong_heading = validate_fusion_content(
+        build(education.value, schema_version="1.4"),
+        community_jd,
+        experiences,
+        all_facts,
+        experience_selection=v14_selection,
+    )
+    assert "ABILITY_CATEGORY_STRUCTURE_CHANGED" in finding_codes(community_wrong_heading)
 
 
 def test_chinese_and_arabic_numeric_claims_are_normalized() -> None:

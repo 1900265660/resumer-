@@ -1,0 +1,254 @@
+{
+  "$defs": {
+    "BulletIntent": {
+      "additionalProperties": false,
+      "properties": {
+        "intent_id": {
+          "pattern": "^INT-[0-9]{3}$",
+          "title": "Intent Id",
+          "type": "string"
+        },
+        "purpose": {
+          "minLength": 1,
+          "title": "Purpose",
+          "type": "string"
+        },
+        "required_fact_ids": {
+          "items": {
+            "pattern": "^FACT-[A-Z]+-[0-9]{3}-[0-9]{2}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Required Fact Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "intent_id",
+        "purpose",
+        "required_fact_ids"
+      ],
+      "title": "BulletIntent",
+      "type": "object"
+    },
+    "OwnershipGuard": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_claims": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Allowed Claims",
+          "type": "array"
+        },
+        "prohibited_claims": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Prohibited Claims",
+          "type": "array"
+        }
+      },
+      "required": [
+        "allowed_claims"
+      ],
+      "title": "OwnershipGuard",
+      "type": "object"
+    },
+    "SourceDigests": {
+      "additionalProperties": false,
+      "properties": {
+        "jd_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Jd Sha256",
+          "type": "string"
+        },
+        "fact_snapshot_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fact Snapshot Sha256",
+          "type": "string"
+        },
+        "preferences_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Preferences Sha256",
+          "type": "string"
+        },
+        "reference_cards_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Cards Sha256"
+        }
+      },
+      "required": [
+        "jd_sha256",
+        "fact_snapshot_sha256",
+        "preferences_sha256"
+      ],
+      "title": "SourceDigests",
+      "type": "object"
+    },
+    "StoryEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "context_fact_ids": {
+          "items": {
+            "pattern": "^FACT-[A-Z]+-[0-9]{3}-[0-9]{2}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Context Fact Ids",
+          "type": "array"
+        },
+        "action_fact_ids": {
+          "items": {
+            "pattern": "^FACT-[A-Z]+-[0-9]{3}-[0-9]{2}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Action Fact Ids",
+          "type": "array"
+        },
+        "method_fact_ids": {
+          "items": {
+            "pattern": "^FACT-[A-Z]+-[0-9]{3}-[0-9]{2}$",
+            "type": "string"
+          },
+          "title": "Method Fact Ids",
+          "type": "array"
+        },
+        "challenge_fact_ids": {
+          "items": {
+            "pattern": "^FACT-[A-Z]+-[0-9]{3}-[0-9]{2}$",
+            "type": "string"
+          },
+          "title": "Challenge Fact Ids",
+          "type": "array"
+        },
+        "result_fact_ids": {
+          "items": {
+            "pattern": "^FACT-[A-Z]+-[0-9]{3}-[0-9]{2}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Result Fact Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "context_fact_ids",
+        "action_fact_ids",
+        "result_fact_ids"
+      ],
+      "title": "StoryEvidence",
+      "type": "object"
+    },
+    "StoryExperience": {
+      "additionalProperties": false,
+      "properties": {
+        "experience_id": {
+          "pattern": "^EXP-[A-Z]+-[0-9]{3}$",
+          "title": "Experience Id",
+          "type": "string"
+        },
+        "story_thesis": {
+          "minLength": 1,
+          "title": "Story Thesis",
+          "type": "string"
+        },
+        "capability_ids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Capability Ids",
+          "type": "array"
+        },
+        "evidence": {
+          "$ref": "#/$defs/StoryEvidence"
+        },
+        "bullet_intents": {
+          "items": {
+            "$ref": "#/$defs/BulletIntent"
+          },
+          "minItems": 1,
+          "title": "Bullet Intents",
+          "type": "array"
+        },
+        "ownership_guard": {
+          "$ref": "#/$defs/OwnershipGuard"
+        }
+      },
+      "required": [
+        "experience_id",
+        "story_thesis",
+        "capability_ids",
+        "evidence",
+        "bullet_intents",
+        "ownership_guard"
+      ],
+      "title": "StoryExperience",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": "1.5",
+      "enum": [
+        "1.0",
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5"
+      ],
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^cr_[0-9]{8}T[0-9]{6}_[a-z0-9]{6}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "source_digests": {
+      "$ref": "#/$defs/SourceDigests"
+    },
+    "experience_selection_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Experience Selection Sha256",
+      "type": "string"
+    },
+    "experiences": {
+      "items": {
+        "$ref": "#/$defs/StoryExperience"
+      },
+      "maxItems": 4,
+      "minItems": 1,
+      "title": "Experiences",
+      "type": "array"
+    }
+  },
+  "required": [
+    "run_id",
+    "created_at",
+    "source_digests",
+    "experience_selection_sha256",
+    "experiences"
+  ],
+  "title": "StoryPlanArtifact",
+  "type": "object"
+}

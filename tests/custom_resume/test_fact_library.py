@@ -121,6 +121,34 @@ def test_damaged_or_incomplete_metadata_is_rejected() -> None:
         migrate_text(incomplete)
 
 
+def test_observed_fact_allows_confirmed_at_but_not_estimate_only_fields() -> None:
+    # confirmed_at is a general confirmation timestamp, not estimate-only
+    with_confirmed = SAMPLE.replace(
+        "- 完成原型与验收。",
+        "- 完成原型与验收。 <!-- fact_id: FACT-WORK-001-01; provenance: observed; confirmed_at: 2026-09-01 -->",
+    )
+    migrated, _ = migrate_text(with_confirmed)
+    _, facts = parse_fact_records(migrated)
+    assert facts["FACT-WORK-001-01"].provenance == "observed"
+    assert facts["FACT-WORK-001-01"].metadata["confirmed_at"] == "2026-09-01"
+
+    # source_run is estimate-only and must be rejected for observed
+    with_source_run = SAMPLE.replace(
+        "- 完成原型与验收。",
+        "- 完成原型与验收。 <!-- fact_id: FACT-WORK-001-01; provenance: observed; source_run: test123 -->",
+    )
+    with pytest.raises(FactLibraryError, match="estimate-only"):
+        migrate_text(with_source_run)
+
+    # estimate_basis is estimate-only and must be rejected for observed
+    with_basis = SAMPLE.replace(
+        "- 完成原型与验收。",
+        "- 完成原型与验收。 <!-- fact_id: FACT-WORK-001-01; provenance: observed; estimate_basis: guess -->",
+    )
+    with pytest.raises(FactLibraryError, match="estimate-only"):
+        migrate_text(with_basis)
+
+
 def test_fact_id_must_reference_its_current_experience() -> None:
     mismatched = SAMPLE.replace(
         "### 测试公司｜产品实习生｜2025/01–2025/03",
@@ -173,6 +201,40 @@ def test_real_fact_library_supports_read_only_preview(tmp_path: Path) -> None:
     assert report.body_preserved is True
     assert report.experience_count > 0
     assert report.fact_count > 0
+
+
+def test_eval_style_four_section_snapshot_is_trace_parseable() -> None:
+    snapshot = (
+        REPO_ROOT
+        / "tests"
+        / "custom_resume"
+        / "fixtures"
+        / "community-extension"
+        / "fact-snapshot.md"
+    ).read_text(encoding="utf-8")
+
+    experiences, facts = parse_fact_records(snapshot)
+
+    assert experiences["EXP-EDU-101"].category == "EDU"
+    assert experiences["EXP-PROJECT-102"].category == "PROJECT"
+    assert experiences["EXP-SKILL-101"].category == "SKILL"
+    assert facts["FACT-PROJECT-102-02"].experience_id == "EXP-PROJECT-102"
+
+
+def test_eval_style_adjacent_evidence_section_is_trace_parseable() -> None:
+    snapshot = (
+        REPO_ROOT
+        / "tests"
+        / "custom_resume"
+        / "fixtures"
+        / "game-designer-extension"
+        / "fact-snapshot.md"
+    ).read_text(encoding="utf-8")
+
+    experiences, facts = parse_fact_records(snapshot)
+
+    assert experiences["EXP-PROJECT-206"].category == "PROJECT"
+    assert facts["FACT-PROJECT-206-01"].experience_id == "EXP-PROJECT-206"
 
 
 def test_apply_requires_approval_and_preserves_body(tmp_path: Path) -> None:

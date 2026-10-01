@@ -1,15 +1,47 @@
-# V1.4 Content Quality Rubric
+# Schema 1.5 Content Quality Gates
 
-Score each 0–10. Passing requires at least 8 in every dimension; hard truth/schema/selection failures cannot be overridden.
+Quality is enforced in three independent layers. A later layer cannot override an earlier failure.
 
-- Positive JD evidence: only cited, supported candidate evidence counts. Gap disclosure contributes zero coverage.
-- Selection quality: fact-backed direct/adjacent/analogical evidence is recalled without letting candidate chains leak; job-match and portfolio scores stay separate; at least two WORK entries are used when available; same-group personal projects are limited to two; auxiliary content is at most 25%; no higher-value exclusion or section-balance override lacks an approved reason.
-- Evidence depth: bullets show supported action, method/deliverable, and result where available without inventing causal links.
-- HR scan: highest-value evidence appears first and weak detail does not displace stronger evidence.
-- Language naturalness: concise Chinese resume language without audit-memo phrases, repetitive labels, or inflated ownership.
-- Gap disclosure: separate boolean gate; material gaps are honestly disclosed in review content without masquerading as qualification.
-- Fixed baseline: education is copied exactly and self-ability entries remain 专业硬技能、综合软技能、游戏体验、语言能力; failure is deterministic rather than a compensable quality score.
+## Deterministic gate
 
-The content density budget is maximum-oriented: warn above 1,500 Chinese characters or 14 experience bullets, but never pad a short honest draft.
+The candidate fails when any of these is true:
 
-After these base dimensions pass, the independent HR decision gate applies a stricter standard. Passing requires `strong_push`, overall >=8.5, and >=8.5 in role fit, narrative completeness, evidence specificity, decision readiness, and credibility. It must penalize over-compression, unused high-value confirmed facts, vague ownership/method/risk, and metrics without interview-defensible context. Base scores cannot compensate for HR failure.
+- a selected WORK/PROJECT experience has no non-empty resume content;
+- an experience is missing story-plan, intent, or fact bindings;
+- its bullets do not jointly cover context/problem, action/method, and result/impact;
+- multiple bullets repeat the same intent instead of serving complementary purposes;
+- resume-visible text contains negative responsibility disclaimers or internal audit/workflow wording;
+- a bullet is identical to a source fact;
+- a bullet is at least 0.90 similar to one fact, cites only that fact, and does not synthesize multiple story elements;
+- a claim, number, or ownership assertion is unsupported by confirmed facts.
+
+Similarity from 0.80 through 0.90 is an audit warning. The internal ownership guard is checked by the gate but is never rendered.
+
+## Independent Auditor
+
+The Auditor checks each experience for:
+
+- a clear target-role selling point;
+- complete background/problem → action/method → result/impact narrative;
+- abstraction and synthesis instead of fact-library transcription;
+- complementary bullets with high information density;
+- inclusion of the highest-value supported evidence;
+- natural, concise Chinese resume language.
+
+A blocking defect or `pass=false` triggers the routed retry. Truth conflicts route to `needs_input` rather than a rewrite.
+
+## HR admission gate
+
+HR runs only after deterministic validation and the post-fusion Auditor pass. Passing requires all of:
+
+- verdict `strong_push`;
+- overall score >=9.0;
+- every decision dimension >=8.0;
+- concrete citations to existing experience IDs and bullet IDs.
+- the content-fullness gate: at least 1,200 Chinese characters overall, 180 in each core experience, and 120 in each auxiliary experience.
+
+HR evaluates interview value, role fit, narrative completeness, evidence specificity, decision readiness, credibility, and content fullness. Visible boundary disclaimers do not earn credit. HR pass changes state only to `ready_for_user_review`; explicit user approval of the final content hash is still required.
+
+## Content fullness
+
+Character thresholds are hard HR admission gates. Bullet totals are never minimum or maximum quality quotas: split only where distinct semantic units or scan readability require it. If confirmed facts cannot support the character thresholds, route to `needs_input` or reselection; never invent, duplicate, or paraphrase filler merely to reach a number.

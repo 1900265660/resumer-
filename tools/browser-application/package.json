@@ -1,0 +1,12 @@
+{
+  "name": "codex-job-application", "version": "0.1.0", "private": true,
+  "type": "module", "license": "GPL-3.0-only", "engines": {"node": ">=22"},
+  "scripts": {
+    "build": "tsc", "check": "tsc --noEmit", "test": "tsx --test tests/*.test.ts",
+    "test:upstream": "node --test extension/tests/*.js",
+    "setup": "node scripts/setup.mjs", "doctor": "node scripts/doctor.mjs",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {"@modelcontextprotocol/sdk": "1.30.0", "playwright": "1.63.0", "zod": "3.25.76"},
+  "devDependencies": {"@types/node": "22.20.4", "tsx": "4.23.15", "typescript": "5.9.3"}
+}

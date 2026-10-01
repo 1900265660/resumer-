@@ -41,12 +41,18 @@ ALLOWED_METADATA_KEYS = {
 SECTION_CATEGORIES = {
     "基本信息": "BASIC",
     "教育": "EDU",
+    "教育经历": "EDU",
     "工作经历": "WORK",
+    "实习/工作经历": "WORK",
     "项目经历": "PROJECT",
+    "实践经历": "PROJECT",
+    "相邻证据": "PROJECT",
     "技能与兴趣": "SKILL",
+    "自我能力": "SKILL",
 }
 SYNTHETIC_SECTION_EXPERIENCES = {"BASIC", "SKILL"}
 HEADING_EXPERIENCES = {"WORK", "PROJECT"}
+H3_EXPERIENCES = HEADING_EXPERIENCES | {"EDU", "SKILL"}
 
 
 class FactLibraryError(ValueError):
@@ -183,16 +189,17 @@ def validate_metadata(
             raise FactLibraryError(
                 f"line {line_number}: fact_id requires a valid provenance"
             )
-        estimate_keys = {"confirmed_at", "source_run", "estimate_basis"}
-        if provenance == "accepted_estimate" and not estimate_keys.issubset(metadata):
+        estimate_required_keys = {"source_run", "estimate_basis"}
+        estimate_forbidden_for_observed = {"source_run", "estimate_basis"}
+        if provenance == "accepted_estimate" and not estimate_required_keys.issubset(metadata):
             raise FactLibraryError(
                 f"line {line_number}: accepted_estimate metadata is incomplete"
             )
-        if provenance == "observed" and estimate_keys.intersection(metadata):
+        if provenance == "observed" and estimate_forbidden_for_observed.intersection(metadata):
             raise FactLibraryError(
-                f"line {line_number}: observed fact cannot contain estimate metadata"
+                f"line {line_number}: observed fact cannot contain estimate-only metadata"
             )
-    elif {"provenance", "confirmed_at", "source_run", "estimate_basis"}.intersection(
+    elif {"provenance", "source_run", "estimate_basis"}.intersection(
         metadata
     ):
         raise FactLibraryError(
@@ -297,7 +304,7 @@ def parse_fact_records(source_text: str) -> tuple[dict[str, ExperienceRecord], d
                     heading,
                     _immutable_tokens(current_category or "UNKNOWN", heading),
                 )
-        elif h3 and current_category in HEADING_EXPERIENCES:
+        elif h3 and current_category in H3_EXPERIENCES:
             current_experience_id = metadata.get("experience_id")
             if current_experience_id:
                 heading = h3.group("title")

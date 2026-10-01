@@ -1,0 +1,7 @@
+{
+  "truth_passed": true,
+  "quality": {"jd_coverage": 8.8, "selection_quality": 8.7, "evidence_depth": 8.8, "hr_scan": 8.7, "language_naturalness": 8.6},
+  "hr": {"recommendation": "strong_push", "overall_score": 8.8, "minimum_dimension_score": 8.6},
+  "required_fact_ids": ["FACT-PROJECT-202-01", "FACT-PROJECT-202-02"],
+  "forbidden_inferences": ["mod_testing_is_combat_design"]
+}
